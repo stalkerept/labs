@@ -36,12 +36,6 @@ int find(Table* table, unsigned int key, int release){
 }
 
 void free_table(Table* table){
-    // if(!(!table || !table -> ks)){
-    //     for(int i = 0; i<table -> msize; i++){
-    //         erase(table, table->ks[i].key, 0, 1);
-    //     }
-    // }
-    // free(table);
     if(!table || !table -> ks) return;
     for(int i = 0; i< table ->msize; i++){
         struct Node* n = table -> ks[i].node;
@@ -56,7 +50,7 @@ void free_table(Table* table){
 }
 
 int insert(Table* table, unsigned int key, const char* info){
-    if(!table || !info || table -> size == table -> msize) return 1;
+    if(!table || !info) return 1;
     struct Node* new_node = (struct Node*)malloc(sizeof(struct Node));
     if(!new_node){
         return 1;
@@ -66,22 +60,23 @@ int insert(Table* table, unsigned int key, const char* info){
         free(new_node);
         return 1;
     }
-    int k = find(table, key, 0), count = 1;
-    new_node -> release = count;
+    int k = find(table, key, 0);
+    new_node -> release = 1;
     new_node -> info = new_info;
     new_node -> next = NULL;
     if(k<0){
+        if(table -> size == table -> msize){
+            free(new_node);
+            free(new_info);
+            return 1;
+        }
         table -> ks[table->size].node = new_node;
         table -> ks[table->size].key = key;
         table -> size++;
         return 0;
     }
     struct Node* n = table->ks[k].node;
-    while(n){
-        n = n->next;
-        count++;
-    }
-    new_node -> release = count;
+    new_node -> release = n -> release + 1;
     new_node -> next = table -> ks[k].node;
     table -> ks[k].node = new_node;
     return 0;

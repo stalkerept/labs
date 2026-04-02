@@ -202,7 +202,24 @@ int main() {
                     printf("Таблица очищена.\n");
                 }
                 break;
-
+            case 7:
+                if (!table_initialized) {
+                    printf("Таблица не создана.\n");
+                    break;
+                }
+                printf("Введите имя файла для импорта: ");
+                char filename[256];
+                if (read_string(filename, sizeof(filename)) != 0) {
+                    printf("Ошибка ввода имени файла.\n");
+                    break;
+                }
+                int inserted = import_from_file(&table, filename);
+                if (inserted < 0) {
+                    printf("Ошибка при открытии или чтении файла '%s'.\n", filename);
+                } else {
+                    printf("Импортировано %d записей.\n", inserted);
+                }
+                break;
             default:
                 printf("Неверный пункт меню.\n");
                 break;

@@ -63,6 +63,8 @@ CMakeFiles/table_lib.dir/func.c.o: /home/stalkerept/Desktop/Программир
   /usr/lib/gcc/x86_64-linux-gnu/15/include/stddef.h
 
 CMakeFiles/table_lib.dir/utils.c.o: /home/stalkerept/Desktop/Программирование\ на\ си/AiSD/3_cmake/utils.c \
+  /home/stalkerept/Desktop/Программирование\ на\ си/AiSD/3_cmake/func.h \
+  /home/stalkerept/Desktop/Программирование\ на\ си/AiSD/3_cmake/structures.h \
   /home/stalkerept/Desktop/Программирование\ на\ си/AiSD/3_cmake/utils.h \
   /usr/include/alloca.h \
   /usr/include/asm-generic/errno-base.h \
@@ -156,6 +158,8 @@ CMakeFiles/table_lib.dir/utils.c.o: /home/stalkerept/Desktop/Программи�
 /usr/include/x86_64-linux-gnu/bits/local_lim.h:
 
 /home/stalkerept/Desktop/Программирование\ на\ си/AiSD/3_cmake/utils.h:
+
+/home/stalkerept/Desktop/Программирование\ на\ си/AiSD/3_cmake/func.h:
 
 /home/stalkerept/Desktop/Программирование\ на\ си/AiSD/3_cmake/utils.c:
 

@@ -1,0 +1,4 @@
+/home/stalkerept/Desktop/Программирование на си/AiSD/3_cmake/build/CMakeFiles/table_lib.dir
+/home/stalkerept/Desktop/Программирование на си/AiSD/3_cmake/build/CMakeFiles/lab.dir
+/home/stalkerept/Desktop/Программирование на си/AiSD/3_cmake/build/CMakeFiles/edit_cache.dir
+/home/stalkerept/Desktop/Программирование на си/AiSD/3_cmake/build/CMakeFiles/rebuild_cache.dir

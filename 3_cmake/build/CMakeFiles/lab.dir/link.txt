@@ -1,0 +1,1 @@
+/usr/bin/cc -Wl,--dependency-file=CMakeFiles/lab.dir/link.d CMakeFiles/lab.dir/lab.c.o -o lab  libtable_lib.a

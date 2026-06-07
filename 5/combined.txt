@@ -1,0 +1,1737 @@
+utils.c:
+```
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
+#include "structures.h"
+#include "func.h"
+#include "algorithms.h"
+#include "heap.h"
+#include "utils.h"
+
+
+char* read_line(const char* prompt) {
+    printf("%s", prompt);
+    fflush(stdout);
+    char buffer[256];
+    if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+        return NULL;
+    }
+    size_t len = strlen(buffer);
+    if (len > 0 && buffer[len-1] == '\n') {
+        buffer[len-1] = '\0';
+        len--;
+    }
+    if (len == 0) return NULL;
+    char* line = malloc(len + 1);
+    if (line) strcpy(line, buffer);
+    return line;
+}
+
+int read_int(const char* prompt, int min, int max) {
+    int value;
+    while (1) {
+        printf("%s", prompt);
+        fflush(stdout);
+        if (scanf("%d", &value) == 1) {
+            if (value >= min && value <= max) {
+                int c;
+                while ((c = getchar()) != '\n' && c != EOF);
+                return value;
+            }
+            printf("Ошибка: число должно быть от %d до %d.\n", min, max);
+        } else {
+            int c = getchar();
+            if (c == EOF) {
+                clearerr(stdin);
+                printf("\nОбнаружен конец ввода.\n");
+                return 0;
+            }
+            printf("Ошибка ввода. Введите целое число.\n");
+            while (c != '\n' && c != EOF) c = getchar();
+        }
+    }
+}
+
+int load_from_file(Graph* graph, const char* filename) {
+    FILE* fp = fopen(filename, "r");
+    if (!fp) {
+        printf("Ошибка открытия файла '%s'\n", filename);
+        return -1;
+    }
+    char line[512];
+    int total_edges = 0;
+    int errors = 0;
+    int line_num = 0;
+    while (fgets(line, sizeof(line), fp)) {
+        line_num++;
+        size_t len = strlen(line);
+        if (len > 0 && line[len-1] == '\n') line[len-1] = '\0';
+        if (line[0] == '#' || line[0] == '\0') continue;
+        char* token1 = strtok(line, " \t");
+        if (!token1) { errors++; continue; }
+        char* token2 = strtok(NULL, " \t");
+        if (!token2) { errors++; continue; }
+        char* token3 = strtok(NULL, " \t");
+        if (!token3) { errors++; continue; }
+        int weight = atoi(token3);
+        if (weight < -10 || weight > 10) {
+            printf("Строка %d: вес %d вне диапазона [-10,10], пропущена.\n", line_num, weight);
+            errors++;
+            continue;
+        }
+        int u = add_vertex(graph, token1);
+        int v = add_vertex(graph, token2);
+        if (u < 0 || v < 0) {
+            printf("Строка %d: ошибка добавления вершин.\n", line_num);
+            errors++;
+            continue;
+        }
+        if (add_edge(graph, u, v, weight) != 0) {
+            printf("Строка %d: ребро '%s' - '%s' уже существует или ошибка.\n", line_num, token1, token2);
+            errors++;
+            continue;
+        }
+        total_edges++;
+    }
+    fclose(fp);
+    printf("Загрузка завершена: добавлено %d рёбер, ошибок в строках: %d\n", total_edges, errors);
+    return errors;
+}
+
+void handle_add_vertex(Graph* graph) {
+    char* name = read_line("Введите имя человека: ");
+    if (!name) {
+        printf("Некорректное имя.\n");
+        return;
+    }
+    int idx = add_vertex(graph, name);
+    if (idx >= 0) {
+        printf("Вершина '%s' добавлена (индекс %d).\n", name, idx);
+    } else {
+        printf("Ошибка: невозможно добавить вершину (возможно, переполнение).\n");
+    }
+    free(name);
+}
+
+void handle_add_edge(Graph* graph) {
+    char* name1 = read_line("Имя первого человека: ");
+    if (!name1) { printf("Некорректный ввод.\n"); return; }
+    char* name2 = read_line("Имя второго человека: ");
+    if (!name2) { printf("Некорректный ввод.\n"); free(name1); return; }
+    int u = get_vertex_index_by_name(graph, name1);
+    int v = get_vertex_index_by_name(graph, name2);
+    if (u == -1 || v == -1) {
+        printf("Ошибка: один или оба человека не найдены.\n");
+        free(name1); free(name2);
+        return;
+    }
+    int weight = read_int("Оценка отношений (от -10 до 10): ", -10, 10);
+    if (add_edge(graph, u, v, weight) == 0) {
+        printf("Ребро между '%s' и '%s' с весом %d добавлено.\n", name1, name2, weight);
+    } else {
+        printf("Ошибка: ребро уже существует или некорректные данные.\n");
+    }
+    free(name1); free(name2);
+}
+
+void handle_delete_vertex(Graph* graph) {
+    char* name = read_line("Имя удаляемого человека: ");
+    if (!name) { printf("Некорректный ввод.\n"); return; }
+    if (delete_vertex(graph, name) == 0) {
+        printf("Вершина '%s' удалена.\n", name);
+    } else {
+        printf("Ошибка: вершина не найдена.\n");
+    }
+    free(name);
+}
+
+void handle_delete_edge(Graph* graph) {
+    char* name1 = read_line("Имя первого человека: ");
+    if (!name1) { printf("Некорректный ввод.\n"); return; }
+    char* name2 = read_line("Имя второго человека: ");
+    if (!name2) { printf("Некорректный ввод.\n"); free(name1); return; }
+    int u = get_vertex_index_by_name(graph, name1);
+    int v = get_vertex_index_by_name(graph, name2);
+    if (u == -1 || v == -1) {
+        printf("Ошибка: вершина не найдена.\n");
+        free(name1); free(name2);
+        return;
+    }
+    if (delete_edge(graph, u, v) == 0) {
+        printf("Ребро между '%s' и '%s' удалено.\n", name1, name2);
+    } else {
+        printf("Ошибка при удалении ребра.\n");
+    }
+    free(name1); free(name2);
+}
+
+void handle_change_vertex_name(Graph* graph) {
+    char* old_name = read_line("Текущее имя человека: ");
+    if (!old_name) { printf("Некорректный ввод.\n"); return; }
+    int idx = get_vertex_index_by_name(graph, old_name);
+    if (idx == -1) {
+        printf("Человек '%s' не найден.\n", old_name);
+        free(old_name);
+        return;
+    }
+    char* new_name = read_line("Новое имя: ");
+    if (!new_name) { printf("Некорректный ввод.\n"); free(old_name); return; }
+    int exist = get_vertex_index_by_name(graph, new_name);
+    if (exist != -1 && exist != idx) {
+        printf("Ошибка: человек с именем '%s' уже существует.\n", new_name);
+        free(old_name); free(new_name);
+        return;
+    }
+    free(graph->vertices[idx].name);
+    graph->vertices[idx].name = strdup(new_name);
+    if (!graph->vertices[idx].name) {
+        printf("Ошибка выделения памяти.\n");
+    } else {
+        printf("Имя изменено с '%s' на '%s'.\n", old_name, new_name);
+    }
+    free(old_name); free(new_name);
+}
+
+void handle_change_edge_weight(Graph* graph) {
+    char* name1 = read_line("Имя первого человека: ");
+    if (!name1) return;
+    char* name2 = read_line("Имя второго человека: ");
+    if (!name2) { free(name1); return; }
+    int u = get_vertex_index_by_name(graph, name1);
+    int v = get_vertex_index_by_name(graph, name2);
+    if (u == -1 || v == -1) {
+        printf("Одна из вершин не найдена.\n");
+        free(name1); free(name2);
+        return;
+    }
+    AdjNode* edge = NULL;
+    for (AdjNode* cur = graph->heads[u]; cur; cur = cur->next) {
+        if (cur->dest == v) { edge = cur; break; }
+    }
+    if (!edge) {
+        printf("Ребро между указанными людьми не существует.\n");
+        free(name1); free(name2);
+        return;
+    }
+    int new_weight = read_int("Новая оценка отношений (-10..10): ", -10, 10);
+    edge->weight = new_weight;
+    for (AdjNode* cur = graph->heads[v]; cur; cur = cur->next) {
+        if (cur->dest == u) {
+            cur->weight = new_weight;
+            break;
+        }
+    }
+    printf("Вес ребра '%s' <-> '%s' изменён на %d.\n", name1, name2, new_weight);
+    free(name1); free(name2);
+}
+
+void handle_print_adjacency(const Graph* graph) {
+    printf("\nСписки смежности:\n");
+    for (int i = 0; i < graph->len; i++) {
+        if (graph->vertices[i].deleted) continue;
+        printf("[%s]: ", graph->vertices[i].name);
+        AdjNode* cur = graph->heads[i];
+        if (!cur) printf("(нет связей)");
+        while (cur) {
+            printf("-> %s (%d) ", graph->vertices[cur->dest].name, cur->weight);
+            cur = cur->next;
+        }
+        printf("\n");
+    }
+}
+
+void handle_graphviz(const Graph* graph) {
+    FILE* dot = fopen("graph.dot", "w");
+    if (!dot) {
+        printf("Не удалось создать файл graph.dot\n");
+        return;
+    }
+    fprintf(dot, "graph G {\n");
+    for (int i = 0; i < graph->len; i++) {
+        if (graph->vertices[i].deleted) continue;
+        fprintf(dot, "  \"%s\";\n", graph->vertices[i].name);
+    }
+    for (int i = 0; i < graph->len; i++) {
+        if (graph->vertices[i].deleted) continue;
+        for (AdjNode* cur = graph->heads[i]; cur; cur = cur->next) {
+            if (i < cur->dest) {
+                fprintf(dot, "  \"%s\" -- \"%s\" [label=\"%d\"];\n",
+                        graph->vertices[i].name,
+                        graph->vertices[cur->dest].name,
+                        cur->weight);
+            }
+        }
+    }
+    fprintf(dot, "}\n");
+    fclose(dot);
+    printf("Файл graph.dot создан. Выполните 'dot -Tpng graph.dot -o graph.png'.\n");
+}
+
+void handle_dfs(Graph* graph) {
+    char* name = read_line("Введите имя человека для поиска потенциальных друзей: ");
+    if (!name) return;
+    int start = get_vertex_index_by_name(graph, name);
+    if (start == -1) {
+        printf("Человек не найден.\n");
+        free(name);
+        return;
+    }
+    reset_colors(graph);
+    printf("Потенциальные друзья (достижимые через неотрицательные отношения):\n");
+    dfs(graph, start);
+    free(name);
+}
+
+void handle_dijkstra(Graph* graph) {
+    char* name1 = read_line("Начальный человек: ");
+    if (!name1) return;
+    char* name2 = read_line("Целевой человек: ");
+    if (!name2) { free(name1); return; }
+    int u = get_vertex_index_by_name(graph, name1);
+    int v = get_vertex_index_by_name(graph, name2);
+    if (u == -1 || v == -1) {
+        printf("Один или оба человека не найдены.\n");
+        free(name1); free(name2);
+        return;
+    }
+    int* dist = (int*)malloc(graph->len * sizeof(int));
+    int* prev = (int*)malloc(graph->len * sizeof(int));
+    if (!dist || !prev) {
+        printf("Ошибка памяти.\n");
+        free(dist); free(prev);
+        free(name1); free(name2);
+        return;
+    }
+    if (dijkstra(graph, u, dist, prev) != 0) {
+        printf("Ошибка выполнения алгоритма Дейкстры.\n");
+        free(dist); free(prev);
+        free(name1); free(name2);
+        return;
+    }
+    if (dist[v] == INT_MAX) {
+        printf("Пути между '%s' и '%s' не существует (только положительные отношения).\n",
+               name1, name2);
+    } else {
+        printf("Кратчайший путь (сумма оценок = %d):\n", dist[v]);
+        print_path(graph, prev, v);
+        printf("\n");
+    }
+    free(dist); free(prev);
+    free(name1); free(name2);
+}
+
+void handle_special_operation(Graph* graph) {
+    char* name = read_line("Введите имя человека для поиска наилучшего знакомого: ");
+    if (!name) return;
+    int start = get_vertex_index_by_name(graph, name);
+    if (start == -1) {
+        printf("Человек не найден.\n");
+        free(name);
+        return;
+    }
+    int** dist = NULL;
+    int** next = NULL;
+    if (floyd_warshall(graph, &dist, &next) != 0) {
+        printf("Ошибка: в графе обнаружен отрицательный цикл.\n");
+        if (dist) free_floyd(dist, graph->len);
+        if (next) free_floyd(next, graph->len);
+        free(name);
+        return;
+    }
+    int n = graph->len;
+    int INF = INT_MAX / 2;
+    int best_vertex = -1;
+    int best_sum = -INF;
+    for (int j = 0; j < n; j++) {
+        if (j == start) continue;
+        if (graph->vertices[j].deleted) continue;
+        if (dist[start][j] != INF && dist[start][j] > best_sum) {
+            best_sum = dist[start][j];
+            best_vertex = j;
+        }
+    }
+    if (best_vertex == -1) {
+        printf("Нет достижимых потенциальных знакомых для '%s'.\n", graph->vertices[start].name);
+    } else {
+        printf("Наибольшая сумма оценок кратчайшего пути: %d\n", best_sum);
+        printf("Цепочка: ");
+        print_path_floyd(graph, next, start, best_vertex);
+    }
+    free_floyd(dist, n);
+    if (next) free_floyd(next, n);
+    free(name);
+}
+
+void handle_load_from_file(Graph* graph) {
+    char* filename = read_line("Введите имя файла: ");
+    if (!filename) {
+        printf("Некорректный ввод имени файла.\n");
+        return;
+    }
+    load_from_file(graph, filename);
+    free(filename);
+}
+
+void show_menu() {
+    printf("\n===== Меню =====\n");
+    printf("1. Добавить вершину\n");
+    printf("2. Добавить ребро\n");
+    printf("3. Удалить вершину\n");
+    printf("4. Удалить ребро\n");
+    printf("5. Изменить имя вершины\n");
+    printf("6. Изменить вес ребра\n");
+    printf("7. Вывести списки смежности\n");
+    printf("8. Графический вывод (Graphviz)\n");
+    printf("9. Обход (потенциальные друзья)\n");
+    printf("10. Кратчайший путь (Дейкстра)\n");
+    printf("11. Особая операция (Флойд-Уоршелл)\n");
+    printf("12. Загрузить граф из файла\n");
+    printf("13. Выход\n");
+    printf("Выберите действие: ");
+}
+```
+
+graph.png:
+```
+[Ошибка чтения: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte]
+```
+
+utils.h:
+```
+#ifndef UTILS_H
+#define UTILS_H
+#include "structures.h"
+
+void show_menu();
+void handle_add_vertex(Graph* graph);
+void handle_add_edge(Graph* graph);
+void handle_delete_vertex(Graph* graph);
+void handle_delete_edge(Graph* graph);
+void handle_change_vertex_name(Graph* graph);
+void handle_change_edge_weight(Graph* graph);
+void handle_print_adjacency(const Graph* graph);
+void handle_graphviz(const Graph* graph);
+void handle_dfs(Graph* graph);
+void handle_dijkstra(Graph* graph);
+void handle_special_operation(Graph* graph);
+void handle_load_from_file(Graph* graph);
+char* read_line(const char* prompt);
+int read_int(const char* prompt, int min, int max);
+int load_from_file(Graph* graph, const char* filename);
+#endif
+```
+
+heap.c:
+```
+#include <stdlib.h>
+#include <stdio.h>
+#include "structures.h"
+#include <string.h>
+
+MinHeap* init_heap(int capacity) {
+    MinHeap* heap = (MinHeap*)malloc(sizeof(MinHeap));
+    heap->data = (HeapNode*)malloc(sizeof(HeapNode) * capacity);
+    heap->size = 0;
+    heap->capacity = capacity;
+    return heap;
+}
+
+void swap(HeapNode* a, HeapNode* b) {
+    HeapNode t = *a; *a = *b; *b = t;
+    return;
+}
+
+void heap_push(MinHeap* heap, int vertex, int dist) {
+    if (heap->size >= heap->capacity) return;
+    int i = heap->size++;
+    heap->data[i].vertex = vertex;
+    heap->data[i].dist = dist;
+    while (i > 0) {
+        int parent = (i - 1) / 2;
+        if (heap->data[parent].dist > heap->data[i].dist) {
+            swap(&heap->data[parent], &heap->data[i]);
+            i = parent;
+        } else break;
+    }
+}
+
+int heap_pop(MinHeap* heap, int* out_vertex, int* out_dist) {
+    if (heap->size == 0) return 0;
+    *out_vertex = heap->data[0].vertex;
+    *out_dist = heap->data[0].dist;
+    heap->data[0] = heap->data[--heap->size];
+    int i = 0;
+    while (1) {
+        int smallest = i;
+        int left = 2*i + 1;
+        int right = 2*i + 2;
+        if (left < heap->size && heap->data[left].dist < heap->data[smallest].dist)
+            smallest = left;
+        if (right < heap->size && heap->data[right].dist < heap->data[smallest].dist)
+            smallest = right;
+        if (smallest != i) {
+            swap(&heap->data[i], &heap->data[smallest]);
+            i = smallest;
+        } else break;
+    }
+    return 1;
+}
+
+void free_heap(MinHeap* heap) {
+    free(heap->data);
+    free(heap);
+    return;
+}
+```
+
+graph.dot:
+```
+graph G {
+  "Person59";
+  "Person65";
+  "Person22";
+  "Person83";
+  "Person0";
+  "Person30";
+  "Person28";
+  "Person29";
+  "Person63";
+  "Person67";
+  "Person37";
+  "Person38";
+  "Person50";
+  "Person51";
+  "Person44";
+  "Person99";
+  "Person39";
+  "Person74";
+  "Person60";
+  "Person78";
+  "Person31";
+  "Person32";
+  "Person93";
+  "Person94";
+  "Person87";
+  "Person8";
+  "Person52";
+  "Person15";
+  "Person16";
+  "Person91";
+  "Person17";
+  "Person2";
+  "Person23";
+  "Person1";
+  "Person33";
+  "Person48";
+  "Person79";
+  "Person80";
+  "Person24";
+  "Person75";
+  "Person57";
+  "Person34";
+  "Person81";
+  "Person97";
+  "Person10";
+  "Person11";
+  "Person49";
+  "Person72";
+  "Person58";
+  "Person26";
+  "Person95";
+  "Person96";
+  "Person20";
+  "Person21";
+  "Person14";
+  "Person62";
+  "Person36";
+  "Person5";
+  "Person92";
+  "Person53";
+  "Person55";
+  "Person42";
+  "Person46";
+  "Person6";
+  "Person84";
+  "Person89";
+  "Person56";
+  "Person71";
+  "Person45";
+  "Person70";
+  "Person43";
+  "Person13";
+  "Person69";
+  "Person61";
+  "Person12";
+  "Person18";
+  "Person19";
+  "Person41";
+  "Person98";
+  "Person25";
+  "Person9";
+  "Person76";
+  "Person40";
+  "Person64";
+  "Person88";
+  "Person54";
+  "Person68";
+  "Person27";
+  "Person47";
+  "Person85";
+  "Person77";
+  "Person35";
+  "Person7";
+  "Person3";
+  "Person4";
+  "Person73";
+  "Person66";
+  "Person86";
+  "Person82";
+  "Person90";
+  "Person59" -- "Person60" [label="-9"];
+  "Person59" -- "Person41" [label="0"];
+  "Person59" -- "Person94" [label="3"];
+  "Person59" -- "Person58" [label="-8"];
+  "Person59" -- "Person57" [label="-5"];
+  "Person59" -- "Person65" [label="-4"];
+  "Person65" -- "Person66" [label="2"];
+  "Person65" -- "Person64" [label="-7"];
+  "Person65" -- "Person91" [label="-9"];
+  "Person22" -- "Person4" [label="1"];
+  "Person22" -- "Person21" [label="-4"];
+  "Person22" -- "Person23" [label="10"];
+  "Person22" -- "Person83" [label="7"];
+  "Person83" -- "Person82" [label="-5"];
+  "Person83" -- "Person35" [label="2"];
+  "Person83" -- "Person84" [label="4"];
+  "Person83" -- "Person5" [label="7"];
+  "Person0" -- "Person1" [label="10"];
+  "Person0" -- "Person88" [label="10"];
+  "Person0" -- "Person53" [label="0"];
+  "Person0" -- "Person30" [label="-7"];
+  "Person30" -- "Person61" [label="-8"];
+  "Person30" -- "Person31" [label="-5"];
+  "Person30" -- "Person29" [label="-10"];
+  "Person30" -- "Person62" [label="-4"];
+  "Person30" -- "Person1" [label="-8"];
+  "Person30" -- "Person51" [label="1"];
+  "Person28" -- "Person27" [label="8"];
+  "Person28" -- "Person29" [label="-2"];
+  "Person29" -- "Person62" [label="0"];
+  "Person29" -- "Person2" [label="-8"];
+  "Person29" -- "Person57" [label="5"];
+  "Person29" -- "Person80" [label="10"];
+  "Person29" -- "Person10" [label="-2"];
+  "Person29" -- "Person24" [label="-4"];
+  "Person29" -- "Person36" [label="-5"];
+  "Person29" -- "Person38" [label="3"];
+  "Person63" -- "Person64" [label="-3"];
+  "Person63" -- "Person62" [label="-8"];
+  "Person63" -- "Person67" [label="3"];
+  "Person67" -- "Person66" [label="-2"];
+  "Person67" -- "Person68" [label="4"];
+  "Person37" -- "Person11" [label="-6"];
+  "Person37" -- "Person6" [label="4"];
+  "Person37" -- "Person36" [label="0"];
+  "Person37" -- "Person38" [label="-7"];
+  "Person38" -- "Person14" [label="-8"];
+  "Person38" -- "Person39" [label="-8"];
+  "Person38" -- "Person26" [label="-2"];
+  "Person50" -- "Person49" [label="2"];
+  "Person50" -- "Person52" [label="7"];
+  "Person50" -- "Person51" [label="-8"];
+  "Person51" -- "Person23" [label="6"];
+  "Person51" -- "Person52" [label="7"];
+  "Person51" -- "Person94" [label="-3"];
+  "Person44" -- "Person45" [label="-2"];
+  "Person44" -- "Person43" [label="9"];
+  "Person44" -- "Person79" [label="-8"];
+  "Person44" -- "Person32" [label="2"];
+  "Person44" -- "Person99" [label="1"];
+  "Person99" -- "Person98" [label="8"];
+  "Person99" -- "Person62" [label="5"];
+  "Person99" -- "Person1" [label="7"];
+  "Person39" -- "Person60" [label="-2"];
+  "Person39" -- "Person57" [label="-6"];
+  "Person39" -- "Person14" [label="-4"];
+  "Person39" -- "Person40" [label="2"];
+  "Person39" -- "Person74" [label="1"];
+  "Person74" -- "Person75" [label="-2"];
+  "Person74" -- "Person73" [label="-4"];
+  "Person74" -- "Person14" [label="-8"];
+  "Person74" -- "Person91" [label="-7"];
+  "Person60" -- "Person47" [label="-2"];
+  "Person60" -- "Person61" [label="-3"];
+  "Person60" -- "Person78" [label="-7"];
+  "Person78" -- "Person42" [label="-8"];
+  "Person78" -- "Person79" [label="10"];
+  "Person78" -- "Person77" [label="9"];
+  "Person31" -- "Person91" [label="-4"];
+  "Person31" -- "Person32" [label="3"];
+  "Person32" -- "Person43" [label="0"];
+  "Person32" -- "Person33" [label="0"];
+  "Person93" -- "Person87" [label="-2"];
+  "Person93" -- "Person92" [label="-9"];
+  "Person93" -- "Person94" [label="0"];
+  "Person94" -- "Person76" [label="1"];
+  "Person94" -- "Person62" [label="6"];
+  "Person94" -- "Person95" [label="2"];
+  "Person94" -- "Person87" [label="5"];
+  "Person87" -- "Person88" [label="7"];
+  "Person87" -- "Person86" [label="10"];
+  "Person87" -- "Person26" [label="-4"];
+  "Person87" -- "Person97" [label="5"];
+  "Person8" -- "Person7" [label="-7"];
+  "Person8" -- "Person9" [label="7"];
+  "Person8" -- "Person52" [label="4"];
+  "Person52" -- "Person53" [label="-1"];
+  "Person15" -- "Person14" [label="-8"];
+  "Person15" -- "Person16" [label="-4"];
+  "Person16" -- "Person7" [label="7"];
+  "Person16" -- "Person17" [label="-3"];
+  "Person91" -- "Person90" [label="-9"];
+  "Person91" -- "Person19" [label="0"];
+  "Person91" -- "Person92" [label="-3"];
+  "Person17" -- "Person18" [label="6"];
+  "Person2" -- "Person3" [label="-10"];
+  "Person2" -- "Person1" [label="-7"];
+  "Person2" -- "Person23" [label="-6"];
+  "Person23" -- "Person49" [label="7"];
+  "Person23" -- "Person24" [label="7"];
+  "Person23" -- "Person42" [label="6"];
+  "Person33" -- "Person34" [label="-2"];
+  "Person33" -- "Person48" [label="-3"];
+  "Person48" -- "Person66" [label="1"];
+  "Person48" -- "Person49" [label="-7"];
+  "Person48" -- "Person47" [label="7"];
+  "Person48" -- "Person92" [label="-8"];
+  "Person79" -- "Person68" [label="-4"];
+  "Person79" -- "Person80" [label="-5"];
+  "Person80" -- "Person81" [label="7"];
+  "Person80" -- "Person70" [label="-9"];
+  "Person24" -- "Person89" [label="3"];
+  "Person24" -- "Person25" [label="3"];
+  "Person24" -- "Person75" [label="-1"];
+  "Person75" -- "Person76" [label="10"];
+  "Person57" -- "Person58" [label="-4"];
+  "Person57" -- "Person54" [label="6"];
+  "Person57" -- "Person56" [label="8"];
+  "Person57" -- "Person89" [label="-2"];
+  "Person34" -- "Person35" [label="-6"];
+  "Person34" -- "Person20" [label="10"];
+  "Person34" -- "Person7" [label="3"];
+  "Person34" -- "Person81" [label="9"];
+  "Person81" -- "Person82" [label="-3"];
+  "Person81" -- "Person56" [label="-5"];
+  "Person81" -- "Person53" [label="-1"];
+  "Person97" -- "Person96" [label="-8"];
+  "Person97" -- "Person98" [label="-4"];
+  "Person10" -- "Person9" [label="-8"];
+  "Person10" -- "Person11" [label="8"];
+  "Person11" -- "Person71" [label="-1"];
+  "Person11" -- "Person12" [label="3"];
+  "Person11" -- "Person5" [label="3"];
+  "Person49" -- "Person72" [label="9"];
+  "Person72" -- "Person64" [label="-8"];
+  "Person72" -- "Person56" [label="6"];
+  "Person72" -- "Person73" [label="1"];
+  "Person72" -- "Person77" [label="10"];
+  "Person72" -- "Person71" [label="1"];
+  "Person58" -- "Person55" [label="10"];
+  "Person58" -- "Person14" [label="1"];
+  "Person26" -- "Person27" [label="4"];
+  "Person26" -- "Person25" [label="-3"];
+  "Person95" -- "Person96" [label="-2"];
+  "Person20" -- "Person4" [label="8"];
+  "Person20" -- "Person89" [label="-4"];
+  "Person20" -- "Person19" [label="-10"];
+  "Person20" -- "Person21" [label="7"];
+  "Person21" -- "Person43" [label="-10"];
+  "Person14" -- "Person54" [label="6"];
+  "Person14" -- "Person13" [label="-10"];
+  "Person62" -- "Person41" [label="-10"];
+  "Person62" -- "Person27" [label="-6"];
+  "Person62" -- "Person61" [label="-1"];
+  "Person36" -- "Person68" [label="-8"];
+  "Person36" -- "Person35" [label="-4"];
+  "Person36" -- "Person9" [label="7"];
+  "Person5" -- "Person4" [label="-3"];
+  "Person5" -- "Person45" [label="-4"];
+  "Person5" -- "Person6" [label="-3"];
+  "Person5" -- "Person92" [label="-1"];
+  "Person53" -- "Person54" [label="10"];
+  "Person55" -- "Person54" [label="9"];
+  "Person55" -- "Person56" [label="1"];
+  "Person42" -- "Person43" [label="1"];
+  "Person42" -- "Person41" [label="1"];
+  "Person42" -- "Person46" [label="-7"];
+  "Person46" -- "Person47" [label="4"];
+  "Person46" -- "Person45" [label="-9"];
+  "Person6" -- "Person7" [label="-6"];
+  "Person84" -- "Person85" [label="2"];
+  "Person89" -- "Person90" [label="0"];
+  "Person89" -- "Person88" [label="-3"];
+  "Person56" -- "Person41" [label="7"];
+  "Person56" -- "Person18" [label="0"];
+  "Person56" -- "Person88" [label="-8"];
+  "Person71" -- "Person70" [label="-5"];
+  "Person70" -- "Person69" [label="1"];
+  "Person13" -- "Person40" [label="-1"];
+  "Person13" -- "Person12" [label="-9"];
+  "Person69" -- "Person68" [label="10"];
+  "Person18" -- "Person19" [label="9"];
+  "Person41" -- "Person40" [label="-7"];
+  "Person76" -- "Person77" [label="-8"];
+  "Person47" -- "Person85" [label="4"];
+  "Person85" -- "Person86" [label="-2"];
+  "Person3" -- "Person4" [label="-2"];
+}
+```
+
+generate_file.py:
+```
+import random
+
+def generate_social_graph(num_vertices, extra_edge_prob=0.02, seed=42):
+    random.seed(seed)
+    edges = []
+    for i in range(num_vertices - 1):
+        person1 = f"Person{i}"
+        person2 = f"Person{i+1}"
+        weight = random.randint(-10, 10)
+        edges.append(f"{person1} {person2} {weight}")
+
+    for i in range(num_vertices):
+        for j in range(i+1, num_vertices):
+            if random.random() < extra_edge_prob:
+                weight = random.randint(-10, 10)
+                edges.append(f"Person{i} Person{j} {weight}")
+    random.shuffle(edges)
+    with open("file.txt", "w", encoding="utf-8") as file:
+        file.write("\n".join(edges) + "\n")
+
+if __name__ == "__main__":
+    NUM_PEOPLE = 100
+    EXTRA_EDGE_PROB = 0.02
+
+    generate_social_graph(NUM_PEOPLE, EXTRA_EDGE_PROB)
+```
+
+lab.o:
+```
+[Ошибка чтения: 'utf-8' codec can't decode byte 0x89 in position 66: invalid start byte]
+```
+
+heap.o:
+```
+[Ошибка чтения: 'utf-8' codec can't decode byte 0xb0 in position 40: invalid start byte]
+```
+
+Makefile:
+```
+CC = gcc
+CFLAGS = -std=c11 -Wall -Wextra -g -D_POSIX_C_SOURCE=200809L
+TARGET = lab
+SRC = lab.c func.c heap.c algorithms.c utils.c
+OBJ = $(SRC:.c=.o)
+HDR = structures.h func.h heap.h algorithms.h utils.h
+
+.PHONY: all clean
+
+all: $(TARGET)
+
+$(TARGET): $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
+
+%.o: %.c $(HDR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -f $(OBJ) $(TARGET)
+```
+
+algorithms.h:
+```
+#ifndef ALGORITHMS_H
+#define ALGORITHMS_H
+#include "structures.h"
+
+void reset_colors(Graph* graph);
+void dfs(Graph* graph, int start);
+void dfs_full(Graph* graph);
+int dijkstra(Graph* graph, int start, int* dist, int* prev);
+void print_path(Graph* graph, int* prev, int target);
+int floyd_warshall(Graph* graph, int*** dist_out, int*** next_out);
+void free_floyd(int** matrix, int n);
+void print_path_floyd(Graph* graph, int** next, int u, int v);
+void find_max_distance_pair(Graph* graph, int** dist);
+
+#endif
+```
+
+algorithms.c:
+```
+#include <stdlib.h>
+#include <string.h>
+#include "structures.h"
+#include "heap.h"
+#include <limits.h>
+#include <stdio.h>
+
+void reset_colors(Graph* graph){
+    for (int i = 0; i < graph->len; i++) {
+        if (!graph->vertices[i].deleted)
+            graph->vertices[i].color = WHITE;
+    }
+    return;
+}
+
+void dfs(Graph* graph, int start) {
+    if (!graph || start < 0 || start >= graph->len) return;
+    if (graph->vertices[start].deleted) return;
+    int* stack = (int*)malloc(sizeof(int) * graph->len);
+    if (!stack) return;
+    int top = -1;
+    stack[++top] = start;
+    while (top >= 0) {
+        int u = stack[top--];
+        if (graph->vertices[u].deleted || graph->vertices[u].color != WHITE)
+            continue;
+        graph->vertices[u].color = GRAY;
+        printf("Visit: %s\n", graph->vertices[u].name);
+        AdjNode* cur = graph->heads[u];
+        while (cur) {
+            int v = cur->dest;
+            if (!graph->vertices[v].deleted && graph->vertices[v].color == WHITE && cur -> weight >= 0) {
+                stack[++top] = v;
+            }
+            cur = cur->next;
+        }
+        graph->vertices[u].color = BLACK;
+    }
+    free(stack);
+    return;
+}
+
+void dfs_full(Graph* graph) {
+    reset_colors(graph);
+    for (int i = 0; i < graph->len; i++) {
+        if (!graph->vertices[i].deleted && graph->vertices[i].color == WHITE) {
+            dfs(graph, i);
+        }
+    }
+    return;
+}
+
+int dijkstra(Graph* graph, int start, int* dist, int* prev) {
+    if (!graph || !graph -> vertices || !graph -> heads || !dist) return 1;
+    if (start < 0 || start >= graph->len || graph->vertices[start].deleted) return 1;
+    int n = graph->len;
+    for (int i = 0; i < n; i++) {
+        dist[i] = INT_MAX;
+        if (prev) prev[i] = -1;
+    }
+    dist[start] = 0;
+    MinHeap* heap = init_heap(n * 2);
+    if (!heap) return 1;
+    heap_push(heap, start, 0);
+    while (heap->size > 0) {
+        int u, d;
+        if (!heap_pop(heap, &u, &d)) break;
+        if (d != dist[u]) continue;
+        AdjNode* cur = graph->heads[u];
+        while (cur) {
+            int v = cur->dest;
+            int w = cur->weight;
+            if (!graph->vertices[v].deleted && w >= 0 && dist[u] != INT_MAX) {
+                if (dist[u] + w < dist[v]) {
+                    dist[v] = dist[u] + w;
+                    if (prev) prev[v] = u;
+                    heap_push(heap, v, dist[v]);
+                }
+            }
+            cur = cur->next;
+        }
+    }
+    free_heap(heap);
+    return 0;
+}
+
+void print_path(Graph* graph, int* prev, int target) {
+    if (target < 0 || target >= graph->len || graph->vertices[target].deleted) {
+        printf("Некорректная вершина\n");
+        return;
+    }
+    if (prev[target] == -1) {
+        printf("%s", graph->vertices[target].name);
+        return;
+    }
+    int path[graph->len];
+    int len = 0;
+    int curr = target;
+    while (curr != -1) {
+        path[len++] = curr;
+        curr = prev[curr];
+    }
+    for (int i = len - 1; i >= 0; i--) {
+        printf("%s ", graph->vertices[path[i]].name);
+    }
+    printf("\n");
+}
+
+int floyd_warshall(Graph* graph, int*** dist_out, int*** next_out) {
+    int n = graph->len;
+    int INF = INT_MAX/2;
+    int** dist = (int**)malloc(n * sizeof(int*));
+    if (!dist) {
+        *dist_out = NULL;
+        if (next_out) *next_out = NULL;
+        return -1;
+    }
+    int** next = NULL;
+    if (next_out) {
+        next = (int**)malloc(n * sizeof(int*));
+        if (!next) {
+            free(dist);
+            *dist_out = NULL;
+            *next_out = NULL;
+            return -1;
+        }
+    }
+    for (int i = 0; i < n; i++) {
+        dist[i] = (int*)malloc(n * sizeof(int));
+        if (!dist[i]) {
+            for (int j = 0; j < i; j++) free(dist[j]);
+            free(dist);
+            if (next) {
+                for (int j = 0; j < i; j++) free(next[j]);
+                free(next);
+            }
+            *dist_out = NULL;
+            if (next_out) *next_out = NULL;
+            return -1;
+        }
+        if (next) {
+            next[i] = (int*)malloc(n * sizeof(int));
+            if (!next[i]) {
+                for (int j = 0; j <= i; j++) free(dist[j]);
+                free(dist);
+                for (int j = 0; j < i; j++) free(next[j]);
+                free(next);
+                *dist_out = NULL;
+                *next_out = NULL;
+                return -1;
+            }
+        }
+        for (int j = 0; j < n; j++) {
+            if (i == j) {
+                dist[i][j] = 0;
+                if (next) next[i][j] = -1;
+            } else {
+                dist[i][j] = INF;
+                if (next) next[i][j] = -1;
+            }
+        }
+    }
+    for (int u = 0; u < n; u++) {
+        if (graph->vertices[u].deleted) continue;
+        AdjNode* cur = graph->heads[u];
+        while (cur) {
+            int v = cur->dest;
+            int w = cur->weight;
+            if (!graph->vertices[v].deleted && w < dist[u][v]) {
+                dist[u][v] = w;
+                if (next) next[u][v] = v;
+            }
+            cur = cur->next;
+        }
+    }
+    for (int k = 0; k < n; k++) {
+        if (graph->vertices[k].deleted) continue;
+        for (int i = 0; i < n; i++) {
+            if (graph->vertices[i].deleted || dist[i][k] == INF) continue;
+            for (int j = 0; j < n; j++) {
+                if (graph->vertices[j].deleted || dist[k][j] == INF) continue;
+                if (dist[i][k] + dist[k][j] < dist[i][j]) {
+                    dist[i][j] = dist[i][k] + dist[k][j];
+                    if (next) next[i][j] = next[i][k];
+                }
+            }
+        }
+    }
+    int negative = 0;
+    for (int i = 0; i < n; i++) {
+        if (!graph->vertices[i].deleted && dist[i][i] < 0) {
+            negative = 1;
+            break;
+        }
+    }
+    *dist_out = dist;
+    if (next_out)
+        *next_out = next;
+    else if (next) {
+        for (int i = 0; i < n; i++) free(next[i]);
+        free(next);
+    }
+    return negative ? 1 : 0;
+}
+
+void free_floyd(int** matrix, int n) {
+    for (int i = 0; i < n; i++) free(matrix[i]);
+    free(matrix);
+}
+
+void find_max_distance_pair(Graph* graph, int** dist) {
+    int n = graph->len;
+    int INF = INT_MAX/2;
+    int max_dist = -INF;
+    int from = -1, to = -1;
+    for (int i = 0; i < n; i++) {
+        if (graph->vertices[i].deleted) continue;
+        for (int j = 0; j < n; j++) {
+            if (i == j || graph->vertices[j].deleted) continue;
+            if (dist[i][j] != INF && dist[i][j] > max_dist) {
+                max_dist = dist[i][j];
+                from = i;
+                to = j;
+            }
+        }
+    }
+    if (from != -1) {
+        printf("Пара с максимальным кратчайшим расстоянием:\n");
+        printf("%s -> %s, сумма оценок = %d\n",
+               graph->vertices[from].name, graph->vertices[to].name, max_dist);
+    } else {
+        printf("Нет достижимых пар.\n");
+    }
+}
+
+void print_path_floyd(Graph* graph, int** next, int u, int v) {
+    if (next[u][v] == -1) {
+        printf("Путь не существует.\n");
+        return;
+    }
+    printf("%s", graph->vertices[u].name);
+    while (u != v) {
+        u = next[u][v];
+        printf(" -> %s", graph->vertices[u].name);
+    }
+    printf("\n");
+}
+```
+
+lab.c:
+```
+#include <stdio.h>
+#include <stdlib.h>
+#include "structures.h"
+#include "func.h"
+#include "utils.h"
+
+int main(void){
+    int capacity = 100;
+    printf("Введите начальную ёмкость графа (макс. число вершин): ");
+    if (scanf("%d", &capacity) != 1 || capacity <= 0) {
+        capacity = 100;
+        printf("Установлена ёмкость по умолчанию: 100\n");
+    }
+    while (getchar() != '\n');
+    Graph* graph = init_graph(capacity);
+    if (!graph) {
+        fprintf(stderr, "Ошибка инициализации графа.\n");
+        return 1;
+    }
+    int choice = 0;
+    while (choice != 13) {
+        show_menu();
+        if (scanf("%d", &choice) != 1) {
+            printf("Некорректный ввод. Завершение работы.\n");
+            break;
+        }
+        while (getchar() != '\n');
+        switch (choice) {
+            case 1: handle_add_vertex(graph); break;
+            case 2: handle_add_edge(graph); break;
+            case 3: handle_delete_vertex(graph); break;
+            case 4: handle_delete_edge(graph); break;
+            case 5: handle_change_vertex_name(graph); break;
+            case 6: handle_change_edge_weight(graph); break;
+            case 7: handle_print_adjacency(graph); break;
+            case 8: handle_graphviz(graph); break;
+            case 9: handle_dfs(graph); break;
+            case 10: handle_dijkstra(graph); break;
+            case 11: handle_special_operation(graph); break;
+            case 12: handle_load_from_file(graph); break;
+            case 13: printf("Выход.\n"); break;
+            default: printf("Неизвестная команда.\n");
+        }
+    }
+    free_graph(graph);
+    return 0;
+}
+```
+
+utils.o:
+```
+[Ошибка чтения: 'utf-8' codec can't decode byte 0x83 in position 41: invalid start byte]
+```
+
+heap.h:
+```
+#ifndef HEAP_H
+#define HEAP_H
+#include "structures.h"
+
+MinHeap* init_heap(int capacity);
+void swap(HeapNode* a, HeapNode* b);
+void heap_push(MinHeap* heap, int vertex, int dist);
+int heap_pop(MinHeap* heap, int* out_vertex, int* out_dist);
+void free_heap(MinHeap* heap);
+#endif
+```
+
+func.c:
+```
+#include <stdlib.h>
+#include <string.h>
+#include "structures.h"
+
+Graph* init_graph(int capacity){
+    Graph* graph = (Graph*)malloc(sizeof(Graph));
+    if(!graph) return NULL;
+    graph -> vertices = (Vertex*)malloc(sizeof(Vertex)*capacity);
+    if(!graph -> vertices){
+        free(graph);
+        return NULL;
+    }
+    graph -> heads = (AdjNode**)malloc(sizeof(AdjNode*)*capacity);
+    if(!graph -> heads){
+        free(graph -> vertices);
+        free(graph);
+        return NULL;
+    }
+    graph -> len = 0;
+    graph -> capacity = capacity;
+    for(int i = 0; i < graph -> capacity; i++){
+        graph -> vertices[i].deleted = 1;
+        graph -> vertices[i].name = NULL;
+        graph -> vertices[i].color = WHITE;
+        graph -> heads[i] = NULL;
+    }
+    return graph;
+}
+
+int find(Graph* graph, Vertex vertex){
+    for(int i = 0; i<graph -> len; i++){
+        if (graph->vertices[i].deleted) continue;
+        if(strcmp(graph -> vertices[i].name, vertex.name) == 0) return i;
+    }
+    return -1;
+}
+
+int get_vertex_index_by_name(const Graph* graph, const char* name) {
+    for (int i = 0; i < graph->len; i++){
+        if (graph->vertices[i].deleted) continue;
+        if(strcmp(graph -> vertices[i].name, name) == 0) return i;
+    }
+    return -1;
+}
+
+Vertex init_vertex(const char* name){
+    Vertex new_vertex;
+    new_vertex.name = strdup(name);
+    if(!new_vertex.name){
+        return (Vertex){NULL, WHITE, 0};
+    }
+    new_vertex.color = WHITE;
+    new_vertex.deleted = 0;
+    return new_vertex;
+}
+
+AdjNode* init_node(int weight, int dest){
+    AdjNode* new_node =(AdjNode*)malloc(sizeof(AdjNode));
+    if(!new_node) return NULL;
+    new_node -> dest = dest, new_node ->weight =weight, new_node -> next = NULL;
+    return new_node;
+}
+
+int add_vertex(Graph* graph, const char* name){
+    if(!graph || !graph -> vertices || !graph -> heads || !name) return -1;
+    Vertex v = init_vertex(name);
+    if(!v.name) return -1;
+    int ind = find(graph, v);
+    if(ind != -1){
+        free(v.name);
+        return ind;
+    }
+    int free_ind = -1;
+    for(int i = 0; i < graph -> capacity; i++){
+        if(graph -> vertices[i].deleted != 0){
+            free_ind = i;
+            break;
+        }
+    }
+    if(free_ind==-1){
+        if(graph -> len < graph -> capacity){
+            graph -> vertices[graph -> len] = v;
+            graph -> heads[graph -> len] = NULL;
+            return graph -> len++;
+        }
+        return -1;
+    }
+    else{
+        free(graph -> vertices[free_ind].name);
+        graph -> vertices[free_ind] = v;
+        graph -> heads[free_ind] = NULL;
+        if(graph -> len <= free_ind) graph -> len = free_ind + 1;
+        return free_ind;
+    }
+}
+
+int add_edge(Graph* graph, int u, int v, int weight){
+    if(!graph || !graph ->vertices || !graph ->heads || u<0 || u>=graph -> len || v < 0 || v >= graph -> len) return 1;
+    if(graph -> vertices[u].deleted || graph -> vertices[v].deleted) return 1;
+    for(AdjNode* cur = graph -> heads[u]; cur; cur = cur -> next){
+        if(cur -> dest == v) return 1;
+    }
+    AdjNode* node_1 = init_node(weight, v);
+    if(!node_1) return 1;
+    node_1 -> next = graph -> heads[u];
+    graph -> heads[u] = node_1;
+    AdjNode* node_2 = init_node(weight, u);
+    if(!node_2) return 1;
+    node_2 -> next = graph -> heads[v];
+    graph -> heads[v] = node_2;
+    return 0;
+}
+
+char delete_edge(Graph* graph, int u, int v){
+    if(!graph || !graph -> vertices || !graph -> heads || graph -> len <= 0 || graph -> capacity <=0 || u<0 || u>=graph -> len || v<0 || v >= graph -> len) return 1;
+    AdjNode* curr = graph -> heads[u], *prev = NULL;
+    while(curr){
+        if(curr -> dest == v){
+            if(prev) prev -> next = curr -> next;
+            else graph -> heads[u] = curr -> next;
+            free(curr);
+            break;
+        }
+        prev = curr;
+        curr = curr -> next;
+    }
+
+    AdjNode* curr2 = graph -> heads[v], *prev2 = NULL;
+    while(curr2){
+        if(curr2 -> dest == u){
+            if(prev2) prev2 -> next = curr2 -> next;
+            else graph -> heads[v] = curr2 -> next;
+            free(curr2);
+            break;
+        }
+        prev2 = curr2;
+        curr2 = curr2 -> next;
+    }
+    return 0;
+}
+
+
+char delete_vertex(Graph* graph, const char* name){
+    if(!graph || !graph -> vertices || !graph -> heads || !name || graph -> len <= 0 || graph -> capacity <=0) return 1;
+    int ind = get_vertex_index_by_name(graph, name);
+    if(ind == -1) return 1;
+    while(graph -> heads[ind]){
+        int res = delete_edge(graph, graph->heads[ind]->dest, ind);
+        if(res != 0) return 1;
+    }
+    free(graph -> vertices[ind].name);
+    graph -> vertices[ind].name = NULL;
+    graph -> vertices[ind].deleted = 1;
+    return 0;
+}
+
+void free_graph(Graph* graph){
+    if(!graph || !graph -> vertices || !graph -> heads) return;
+    for(int i = 0; i<graph->len; i++){
+        free(graph -> vertices[i].name);
+    }
+    free(graph -> vertices);
+    for(int i = 0; i<graph->len; i++){
+        AdjNode* now = graph ->heads[i];
+        while(now){
+            AdjNode* prev = now;
+            now = now -> next;
+            free(prev);
+        }
+    }
+    free(graph -> heads);
+    free(graph);
+    return;
+}
+```
+
+script.py:
+```
+import os
+import argparse
+import sys
+
+def collect_and_combine(input_dir, output_file, encoding='utf-8'):
+    """
+    Рекурсивно обходит input_dir, читает все файлы (кроме выходного) и записывает их
+    содержимое в output_file с заголовками-разделителями.
+    """
+    # Нормализуем пути
+    input_dir = os.path.abspath(input_dir)
+    output_file = os.path.abspath(output_file)
+
+    if not os.path.isdir(input_dir):
+        print(f"Ошибка: папка '{input_dir}' не существует.", file=sys.stderr)
+        sys.exit(1)
+
+    # Проверяем, не пытаемся ли мы записать в файл внутри самой обрабатываемой папки
+    # (это приведёт к чтению растущего файла). Если да – предупреждаем.
+    if output_file.startswith(input_dir):
+        print(
+            f"Предупреждение: выходной файл '{output_file}' находится внутри обрабатываемой папки.",
+            file=sys.stderr
+        )
+        print("Он будет пропущен при чтении, но это может вызвать путаницу.", file=sys.stderr)
+
+    with open(output_file, 'w', encoding=encoding) as out_f:
+        for root, dirs, files in os.walk(input_dir):
+            for file in files:
+                full_path = os.path.join(root, file)
+
+                # Пропускаем сам выходной файл, если он попался в обходе
+                if full_path == output_file:
+                    continue
+
+                # Получаем относительный путь от input_dir для красоты
+                rel_path = os.path.relpath(full_path, input_dir)
+
+                try:
+                    with open(full_path, 'r', encoding=encoding) as in_f:
+                        content = in_f.read()
+                except Exception as e:
+                    print(f"Не удалось прочитать файл {rel_path}: {e}", file=sys.stderr)
+                    # Можно записать в выходной файл сообщение об ошибке
+                    content = f"[Ошибка чтения: {e}]"
+
+                # Записываем заголовок и содержимое
+                out_f.write(f"{rel_path}:\n")
+                out_f.write("```\n")
+                out_f.write(content)
+                # Если файл не заканчивается переводом строки, добавим его для аккуратности
+                if not content.endswith('\n'):
+                    out_f.write('\n')
+                out_f.write("```\n\n")
+
+    print(f"Готово! Результат сохранён в {output_file}")
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Объединяет текстовые файлы из папки в один большой файл с метками источников."
+    )
+    parser.add_argument(
+        '-i', '--input-dir',
+        default='.',
+        help="Корневая папка для поиска текстовых файлов (по умолчанию текущая)"
+    )
+    parser.add_argument(
+        '-o', '--output-file',
+        default='combined.txt',
+        help="Имя выходного файла (по умолчанию combined.txt)"
+    )
+    parser.add_argument(
+        '--encoding',
+        default='utf-8',
+        help="Кодировка текстовых файлов (по умолчанию utf-8)"
+    )
+    args = parser.parse_args()
+
+    collect_and_combine(args.input_dir, args.output_file, args.encoding)
+
+if __name__ == '__main__':
+    main()
+```
+
+structures.h:
+```
+#ifndef STRUCTURES_H
+#define STRUCTURES_H
+
+typedef enum{
+    WHITE,
+    GRAY,
+    BLACK
+}Color;
+
+typedef struct Vertex{
+    char* name;
+    Color color;
+    char deleted;
+}Vertex;
+
+typedef struct AdjNode {
+    int dest;              
+    int weight;
+    struct AdjNode* next;
+} AdjNode;
+
+typedef struct Graph{
+    Vertex* vertices;
+    int len;
+    int capacity;
+    AdjNode** heads;
+}Graph;
+
+typedef struct {
+    int vertex;
+    int dist;
+} HeapNode;
+
+typedef struct {
+    HeapNode* data;
+    int size;
+    int capacity;
+} MinHeap;
+
+
+#endif
+```
+
+algorithms.o:
+```
+[Ошибка чтения: 'utf-8' codec can't decode byte 0x89 in position 66: invalid start byte]
+```
+
+func.o:
+```
+[Ошибка чтения: 'utf-8' codec can't decode byte 0x89 in position 66: invalid start byte]
+```
+
+file.txt:
+```
+Person59 Person65 -4
+Person22 Person83 7
+Person0 Person30 -7
+Person28 Person29 -2
+Person63 Person67 3
+Person37 Person38 -7
+Person50 Person51 -8
+Person44 Person99 1
+Person39 Person74 1
+Person60 Person78 -7
+Person31 Person32 3
+Person93 Person94 0
+Person87 Person94 5
+Person8 Person52 4
+Person15 Person16 -4
+Person74 Person91 -7
+Person16 Person17 -3
+Person2 Person23 -6
+Person1 Person99 7
+Person33 Person48 -3
+Person65 Person91 -9
+Person79 Person80 -5
+Person24 Person75 -1
+Person57 Person59 -5
+Person34 Person81 9
+Person87 Person97 5
+Person50 Person52 7
+Person10 Person11 8
+Person49 Person72 9
+Person58 Person59 -8
+Person26 Person38 -2
+Person32 Person33 0
+Person95 Person96 -2
+Person20 Person21 7
+Person14 Person58 1
+Person62 Person63 -8
+Person36 Person37 0
+Person32 Person44 2
+Person5 Person92 -1
+Person53 Person81 -1
+Person55 Person58 10
+Person5 Person83 7
+Person42 Person46 -7
+Person5 Person11 3
+Person5 Person6 -3
+Person83 Person84 4
+Person57 Person89 -2
+Person55 Person56 1
+Person71 Person72 1
+Person56 Person81 -5
+Person30 Person51 1
+Person5 Person45 -4
+Person23 Person42 6
+Person70 Person71 -5
+Person32 Person43 0
+Person62 Person99 5
+Person59 Person94 3
+Person13 Person14 -10
+Person26 Person87 -4
+Person69 Person70 1
+Person70 Person80 -9
+Person60 Person61 -3
+Person92 Person93 -9
+Person12 Person13 -9
+Person18 Person19 9
+Person41 Person42 1
+Person98 Person99 8
+Person29 Person38 3
+Person48 Person92 -8
+Person6 Person37 4
+Person24 Person25 3
+Person9 Person36 7
+Person75 Person76 10
+Person61 Person62 -1
+Person13 Person40 -1
+Person64 Person65 -7
+Person56 Person57 8
+Person91 Person92 -3
+Person25 Person26 -3
+Person94 Person95 2
+Person88 Person89 -3
+Person54 Person57 6
+Person22 Person23 10
+Person29 Person36 -5
+Person67 Person68 4
+Person27 Person28 8
+Person38 Person39 -8
+Person57 Person58 -4
+Person47 Person48 7
+Person51 Person94 -3
+Person63 Person64 -3
+Person47 Person85 4
+Person52 Person53 -1
+Person24 Person89 3
+Person62 Person94 6
+Person97 Person98 -4
+Person40 Person41 -7
+Person72 Person77 10
+Person24 Person29 -4
+Person96 Person97 -8
+Person0 Person53 0
+Person21 Person43 -10
+Person35 Person83 2
+Person23 Person24 7
+Person44 Person79 -8
+Person77 Person78 9
+Person14 Person74 -8
+Person21 Person22 -4
+Person7 Person34 3
+Person68 Person69 10
+Person20 Person34 10
+Person48 Person49 -7
+Person43 Person44 9
+Person3 Person4 -2
+Person4 Person22 1
+Person35 Person36 -4
+Person19 Person20 -10
+Person8 Person9 7
+Person45 Person46 -9
+Person76 Person94 1
+Person7 Person16 7
+Person87 Person93 -2
+Person1 Person30 -8
+Person42 Person43 1
+Person30 Person62 -4
+Person73 Person74 -4
+Person26 Person27 4
+Person4 Person5 -3
+Person80 Person81 7
+Person36 Person68 -8
+Person14 Person15 -8
+Person48 Person66 1
+Person11 Person37 -6
+Person31 Person91 -4
+Person10 Person29 -2
+Person39 Person40 2
+Person14 Person54 6
+Person34 Person35 -6
+Person9 Person10 -8
+Person14 Person38 -8
+Person14 Person39 -4
+Person86 Person87 10
+Person84 Person85 2
+Person56 Person88 -8
+Person44 Person45 -2
+Person7 Person8 -7
+Person29 Person80 10
+Person0 Person88 10
+Person87 Person88 7
+Person47 Person60 -2
+Person29 Person30 -10
+Person1 Person2 -7
+Person82 Person83 -5
+Person27 Person62 -6
+Person20 Person89 -4
+Person76 Person77 -8
+Person78 Person79 10
+Person17 Person18 6
+Person65 Person66 2
+Person72 Person73 1
+Person51 Person52 7
+Person2 Person3 -10
+Person54 Person55 9
+Person42 Person78 -8
+Person29 Person57 5
+Person89 Person90 0
+Person85 Person86 -2
+Person11 Person12 3
+Person2 Person29 -8
+Person4 Person20 8
+Person68 Person79 -4
+Person53 Person54 10
+Person56 Person72 6
+Person41 Person59 0
+Person11 Person71 -1
+Person6 Person7 -6
+Person30 Person31 -5
+Person0 Person1 10
+Person49 Person50 2
+Person74 Person75 -2
+Person59 Person60 -9
+Person39 Person57 -6
+Person46 Person47 4
+Person18 Person56 0
+Person64 Person72 -8
+Person41 Person62 -10
+Person23 Person49 7
+Person19 Person91 0
+Person29 Person62 0
+Person39 Person60 -2
+Person33 Person34 -2
+Person90 Person91 -9
+Person41 Person56 7
+Person30 Person61 -8
+Person23 Person51 6
+Person66 Person67 -2
+Person81 Person82 -3
+```
+
+lab:
+```
+[Ошибка чтения: 'utf-8' codec can't decode byte 0x80 in position 24: invalid start byte]
+```
+
+func.h:
+```
+#ifndef FUNC_H
+#define FUNC_H
+#include "structures.h"
+
+Graph* init_graph(int capacity);
+int find(Graph* graph, Vertex vertex);
+Vertex init_vertex(const char* name);
+AdjNode* init_node(int weight, int dest);
+int add_vertex(Graph* graph, const char* name);
+int add_edge(Graph* graph, int u, int v, int weight);
+char delete_edge(Graph* graph, int u, int v);
+char delete_vertex(Graph* graph, const char* name);
+void free_graph(Graph* graph);
+int get_vertex_index_by_name(const Graph* graph, const char* name);
+#endif
+```
+

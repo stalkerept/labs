@@ -1,0 +1,120 @@
+==7673== Memcheck, a memory error detector
+==7673== Copyright (C) 2002-2024, and GNU GPL'd, by Julian Seward et al.
+==7673== Using Valgrind-3.25.1 and LibVEX; rerun with -h for copyright info
+==7673== Command: ./lab
+==7673== 
+==7673== Conditional jump or move depends on uninitialised value(s)
+==7673==    at 0x40014A3: main (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673== 
+==7673== Conditional jump or move depends on uninitialised value(s)
+==7673==    at 0x4001281: push (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673==    by 0x400148C: main (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673== 
+==7673== Use of uninitialised value of size 8
+==7673==    at 0x48D02A2: _itoa_word (_fitoa_word.c:38)
+==7673==    by 0x48DA9EE: __printf_buffer (vfprintf-process-arg.c:155)
+==7673==    by 0x48DC7A0: __vfprintf_internal (vfprintf-internal.c:1543)
+==7673==    by 0x48D126A: printf (printf.c:33)
+==7673==    by 0x40012FD: print_queue (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673==    by 0x40014CE: main (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673== 
+==7673== Conditional jump or move depends on uninitialised value(s)
+==7673==    at 0x48D02A9: _itoa_word (_fitoa_word.c:38)
+==7673==    by 0x48DA9EE: __printf_buffer (vfprintf-process-arg.c:155)
+==7673==    by 0x48DC7A0: __vfprintf_internal (vfprintf-internal.c:1543)
+==7673==    by 0x48D126A: printf (printf.c:33)
+==7673==    by 0x40012FD: print_queue (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673==    by 0x40014CE: main (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673== 
+==7673== Conditional jump or move depends on uninitialised value(s)
+==7673==    at 0x48DAE05: __printf_buffer (vfprintf-process-arg.c:186)
+==7673==    by 0x48DC7A0: __vfprintf_internal (vfprintf-internal.c:1543)
+==7673==    by 0x48D126A: printf (printf.c:33)
+==7673==    by 0x40012FD: print_queue (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673==    by 0x40014CE: main (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673== 
+==7673== Conditional jump or move depends on uninitialised value(s)
+==7673==    at 0x48DB61E: __printf_buffer (vfprintf-process-arg.c:208)
+==7673==    by 0x48DC7A0: __vfprintf_internal (vfprintf-internal.c:1543)
+==7673==    by 0x48D126A: printf (printf.c:33)
+==7673==    by 0x40012FD: print_queue (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673==    by 0x40014CE: main (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673== 
+0; ==7673== 
+==7673== HEAP SUMMARY:
+==7673==     in use at exit: 256 bytes in 3 blocks
+==7673==   total heap usage: 9 allocs, 6 frees, 5,832 bytes allocated
+==7673== 
+==7673== 16 bytes in 1 blocks are definitely lost in loss record 1 of 3
+==7673==    at 0x4849818: malloc (vg_replace_malloc.c:446)
+==7673==    by 0x4001381: main (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673== 
+==7673== 120 bytes in 1 blocks are indirectly lost in loss record 2 of 3
+==7673==    at 0x4849818: malloc (vg_replace_malloc.c:446)
+==7673==    by 0x40011B6: push (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673==    by 0x400148C: main (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673== 
+==7673== 240 (120 direct, 120 indirect) bytes in 1 blocks are definitely lost in loss record 3 of 3
+==7673==    at 0x4849818: malloc (vg_replace_malloc.c:446)
+==7673==    by 0x40011B6: push (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673==    by 0x400148C: main (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673== 
+==7673== LEAK SUMMARY:
+==7673==    definitely lost: 136 bytes in 2 blocks
+==7673==    indirectly lost: 120 bytes in 1 blocks
+==7673==      possibly lost: 0 bytes in 0 blocks
+==7673==    still reachable: 0 bytes in 0 blocks
+==7673==         suppressed: 0 bytes in 0 blocks
+==7673== 
+==7673== Use --track-origins=yes to see where uninitialised values come from
+==7673== ERROR SUMMARY: 9 errors from 8 contexts (suppressed: 0 from 0)
+==7673== 
+==7673== 1 errors in context 1 of 8:
+==7673== Conditional jump or move depends on uninitialised value(s)
+==7673==    at 0x48DB61E: __printf_buffer (vfprintf-process-arg.c:208)
+==7673==    by 0x48DC7A0: __vfprintf_internal (vfprintf-internal.c:1543)
+==7673==    by 0x48D126A: printf (printf.c:33)
+==7673==    by 0x40012FD: print_queue (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673==    by 0x40014CE: main (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673== 
+==7673== 
+==7673== 1 errors in context 2 of 8:
+==7673== Conditional jump or move depends on uninitialised value(s)
+==7673==    at 0x48DAE05: __printf_buffer (vfprintf-process-arg.c:186)
+==7673==    by 0x48DC7A0: __vfprintf_internal (vfprintf-internal.c:1543)
+==7673==    by 0x48D126A: printf (printf.c:33)
+==7673==    by 0x40012FD: print_queue (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673==    by 0x40014CE: main (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673== 
+==7673== 
+==7673== 1 errors in context 3 of 8:
+==7673== Conditional jump or move depends on uninitialised value(s)
+==7673==    at 0x48D02A9: _itoa_word (_fitoa_word.c:38)
+==7673==    by 0x48DA9EE: __printf_buffer (vfprintf-process-arg.c:155)
+==7673==    by 0x48DC7A0: __vfprintf_internal (vfprintf-internal.c:1543)
+==7673==    by 0x48D126A: printf (printf.c:33)
+==7673==    by 0x40012FD: print_queue (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673==    by 0x40014CE: main (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673== 
+==7673== 
+==7673== 1 errors in context 4 of 8:
+==7673== Use of uninitialised value of size 8
+==7673==    at 0x48D02A2: _itoa_word (_fitoa_word.c:38)
+==7673==    by 0x48DA9EE: __printf_buffer (vfprintf-process-arg.c:155)
+==7673==    by 0x48DC7A0: __vfprintf_internal (vfprintf-internal.c:1543)
+==7673==    by 0x48D126A: printf (printf.c:33)
+==7673==    by 0x40012FD: print_queue (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673==    by 0x40014CE: main (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673== 
+==7673== 
+==7673== 1 errors in context 5 of 8:
+==7673== Conditional jump or move depends on uninitialised value(s)
+==7673==    at 0x40014A3: main (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673== 
+==7673== 
+==7673== 2 errors in context 6 of 8:
+==7673== Conditional jump or move depends on uninitialised value(s)
+==7673==    at 0x4001281: push (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673==    by 0x400148C: main (in /home/stalkerept/Desktop/Программирование на си/AiSD/2/lab)
+==7673== 
+==7673== ERROR SUMMARY: 9 errors from 8 contexts (suppressed: 0 from 0)

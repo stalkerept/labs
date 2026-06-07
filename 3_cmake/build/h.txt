@@ -1,5 +1,5 @@
-100 data1
-100      
+100 data1      
+100 data2 data4 data6
 100 data3
 100 data4
 100 data5

@@ -1,0 +1,1109 @@
+utils.c:
+```
+#include "utils.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include "structures.h"
+#include "storage.h"
+
+#define MIN_BOARD 2
+#define MAX_BOARD 100
+
+int read_board_size(void) {
+    int n;
+    printf("Введите размер поля (N >= 2, максимум %d): ", MAX_BOARD);
+    while (1) {
+        int ret = scanf("%d", &n);
+        if (ret == EOF) {
+            printf("\nВыход.\n");
+            return 0;
+        }
+        if (ret != 1 || n < MIN_BOARD || n > MAX_BOARD) {
+            printf("Некорректный ввод. Введите число от %d до %d: ", MIN_BOARD, MAX_BOARD);
+            int c;
+            while ((c = getchar()) != '\n' && c != EOF);
+            continue;
+        }
+        int c;
+        while ((c = getchar()) != '\n' && c != EOF);
+        return n;
+    }
+}
+
+char read_move(void) {
+    char dir;
+    printf("Ход (w-вверх, s-вниз, a-влево, d-вправо, q-выход): ");
+    while (1) {
+        int ret = scanf(" %c", &dir);
+        if (ret == EOF) {
+            printf("\nВыход.\n");
+            return 'q';
+        }
+        int c;
+        while ((c = getchar()) != '\n' && c != EOF);
+        if (dir == 'w' || dir == 'a' || dir == 's' || dir == 'd' || dir == 'q')
+            return dir;
+        printf("Неверное направление. Используйте w/a/s/d или q для выхода: ");
+    }
+}
+
+void display_board(Storage* s, int size, long long score) {
+    printf("\nScore: %lld\n", score);
+    printf("+");
+    for (int i = 0; i < size; i++) printf("----+");
+    printf("\n");
+    for (int r = 0; r < size; r++) {
+        printf("|");
+        for (int c = 0; c < size; c++) {
+            char key[32];
+            snprintf(key, sizeof(key), "%d,%d", c, r);
+            int val = storage_find(s, key);
+            if (val == -1) val = 0;
+            if (val == 0)
+                printf("    |");
+            else
+                printf("%4d|", val);
+        }
+        printf("\n+");
+        for (int i = 0; i < size; i++) printf("----+");
+        printf("\n");
+    }
+}
+
+void display_game_over(int won, long long score) {
+    if (won)
+        printf("Поздравляем! Вы достигли 2048!\n");
+    else
+        printf("Игра окончена. Нет доступных ходов.\n");
+    printf("Финальный счёт: %lld\n", score);
+}
+```
+
+func_tree.c:
+```
+#define _POSIX_C_SOURCE 200809L
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include "structures.h"
+#include "func_tree.h"
+
+
+static void rotate_right(Leaf** root, Leaf* y) {
+    Leaf* x = y->left;
+    if (!x) return;
+    Leaf* p = y->parent;
+    y->left = x->right;
+    if (x->right) x->right->parent = y;
+    x->right = y;
+    y->parent = x;
+    x->parent = p;
+    if (p) {
+        if (p->left == y) p->left = x;
+        else p->right = x;
+    } else {
+        *root = x;
+    }
+}
+
+static void rotate_left(Leaf** root, Leaf* y) {
+    Leaf* x = y->right;
+    if (!x) return;
+    Leaf* p = y->parent;
+    y->right = x->left;
+    if (x->left) x->left->parent = y;
+    x->left = y;
+    y->parent = x;
+    x->parent = p;
+    if (p) {
+        if (p->left == y) p->left = x;
+        else p->right = x;
+    } else {
+        *root = x;
+    }
+}
+
+Leaf* splay(Leaf* root, const char* coords) {
+    if (!root) return NULL;
+    Leaf* current = root;
+    Leaf* last = NULL;
+    while (current) {
+        last = current;
+        int cmp = strcmp(current->coords, coords);
+        if (cmp == 0) break;
+        if (cmp > 0)
+            current = current->left;
+        else
+            current = current->right;
+    }
+    if (!last) return root;
+    Leaf* new_root = root;
+    while (last->parent) {
+        Leaf* p = last->parent;
+        Leaf* g = p->parent;
+        if (!g) {
+            if (p->left == last) rotate_right(&new_root, p);
+            else rotate_left(&new_root, p);
+        } else if (p->left == last && g->left == p) {
+            rotate_right(&new_root, g);
+            rotate_right(&new_root, p);
+        } else if (p->right == last && g->right == p) {
+            rotate_left(&new_root, g);
+            rotate_left(&new_root, p);
+        } else if (p->right == last && g->left == p) {
+            rotate_left(&new_root, p);
+            rotate_right(&new_root, g);
+        } else {
+            rotate_right(&new_root, p);
+            rotate_left(&new_root, g);
+        }
+    }
+    return new_root;
+}
+
+Leaf* find(Tree* tree, const char* coords) {
+    if (!tree || !tree->root || !coords) return NULL;
+    tree->root = splay(tree->root, coords);
+    if (strcmp(tree->root->coords, coords) == 0)
+        return tree->root;
+    return NULL;
+}
+
+static Leaf* find_extreme(Leaf* node, char mode) {
+    if (!node) return NULL;
+    Leaf* prev = NULL;
+    Leaf* cur = node;
+    if (mode == 1)
+        while (cur) { prev = cur; cur = cur->right; }
+    else if (mode == 2)
+        while (cur) { prev = cur; cur = cur->left; }
+    return prev;
+}
+
+char insert(Tree* tree, int key, const char* coords) {
+    if (!tree || key <= 0 || !coords) return 1;
+    Leaf* new_leaf = (Leaf*)malloc(sizeof(Leaf));
+    if (!new_leaf) return 1;
+    new_leaf->key = key;
+    new_leaf->coords = strdup(coords);
+    if (!new_leaf->coords) {
+        free(new_leaf);
+        return 1;
+    }
+    new_leaf->left = new_leaf->right = new_leaf->parent = NULL;
+    if (!tree->root) {
+        tree->root = new_leaf;
+        tree->count = 1;
+        return 0;
+    }
+    Leaf* curr = tree->root;
+    Leaf* parent = NULL;
+    int cmp = 0;
+    while (curr) {
+        parent = curr;
+        cmp = strcmp(coords, curr->coords);
+        if (cmp > 0)
+            curr = curr->right;
+        else if (cmp < 0)
+            curr = curr->left;
+        else {
+            curr->key = key;
+            free(new_leaf->coords);
+            free(new_leaf);
+            tree->root = splay(tree->root, coords);
+            return 2;
+        }
+    }
+    new_leaf->parent = parent;
+    if (cmp > 0)
+        parent->right = new_leaf;
+    else
+        parent->left = new_leaf;
+    tree->count++;
+    tree->root = splay(tree->root, coords);
+    return 0;
+}
+
+Tree* tree_init(void) {
+    Tree* tree = (Tree*)malloc(sizeof(Tree));
+    if (!tree) return NULL;
+    tree->root = NULL;
+    tree->count = 0;
+    return tree;
+}
+
+Stack* stack_init(unsigned int capacity) {
+    Stack* st = (Stack*)malloc(sizeof(Stack));
+    if (!st) return NULL;
+    st->top = -1;
+    st->capacity = capacity;
+    st->array = (Leaf**)malloc(sizeof(Leaf*) * capacity);
+    if (!st->array) {
+        free(st);
+        return NULL;
+    }
+    return st;
+}
+
+static void stack_push(Stack* st, Leaf* node) {
+    if (st->top + 1 >= st->capacity) {
+        st->capacity *= 2;
+        Leaf** tmp = realloc(st->array, sizeof(Leaf*) * st->capacity);
+        if (!tmp) return;
+        st->array = tmp;
+    }
+    st->array[++st->top] = node;
+}
+
+static Leaf* stack_pop(Stack* st) {
+    if (st->top == -1) return NULL;
+    return st->array[st->top--];
+}
+
+void free_tree(Tree* tree) {
+    if (!tree) return;
+    if (!tree->root) {
+        free(tree);
+        return;
+    }
+    Stack* st = stack_init(256);
+    if (!st) {
+        free(tree);
+        return;
+    }
+    Leaf* curr = tree->root;
+    Leaf* last_visited = NULL;
+    while (st->top != -1 || curr) {
+        if (curr) {
+            stack_push(st, curr);
+            curr = curr->left;
+        } else {
+            Leaf* peek = st->array[st->top];
+            if (peek->right && last_visited != peek->right) {
+                curr = peek->right;
+            } else {
+                last_visited = stack_pop(st);
+                free(last_visited->coords);
+                free(last_visited);
+            }
+        }
+    }
+    free(st->array);
+    free(st);
+    free(tree);
+}
+
+char delete(Tree* tree, const char* coords) {
+    if (!tree || !tree->root || !coords) return 1;
+    Leaf* victim = find(tree, coords);
+    if (!victim) return 1;
+    if (victim->left && victim->right) {
+        Leaf* succ = find_extreme(victim->right, 2);
+        free(victim->coords);
+        victim->key = succ->key;
+        victim->coords = succ->coords;
+        succ->coords = NULL;
+        victim = succ;
+    }
+    Leaf* child = victim->left ? victim->left : victim->right;
+    Leaf* parent = victim->parent;
+    if (parent) {
+        if (parent->left == victim) parent->left = child;
+        else parent->right = child;
+    } else {
+        tree->root = child;
+    }
+    if (child) child->parent = parent;
+    free(victim->coords);
+    free(victim);
+    tree->count--;
+    if (parent) {
+        tree->root = splay(tree->root, parent->coords);
+    }
+    return 0;
+}
+```
+
+hash.c:
+```
+#include <stdint.h>
+#include <string.h>
+
+static inline uint64_t XXH_rotl64(uint64_t x, int r) {
+    return (x << r) | (x >> (64 - r));
+}
+
+static inline uint64_t XXH64_read64(const void* ptr) {
+    uint64_t val;
+    memcpy(&val, ptr, sizeof(val));
+    return val;
+}
+
+static inline uint64_t XXH64_read32(const void* ptr) {
+    uint32_t val;
+    memcpy(&val, ptr, sizeof(val));
+    return (uint64_t)val;
+}
+
+
+uint64_t hash_string(const char* data) {
+    size_t len = (size_t)strlen(data);
+    const uint64_t PRIME64_1 = 0x9E3779B185EBCA87ULL;
+    const uint64_t PRIME64_2 = 0xC2B2AE3D27D4EB4FULL;
+    const uint64_t PRIME64_3 = 0x165667B19E3779F9ULL;
+    const uint64_t PRIME64_4 = 0x85EBCA77C2B2AE63ULL;
+    const uint64_t PRIME64_5 = 0x27D4EB2F165667C5ULL;
+    const unsigned char* p = (const unsigned char*)data;
+    const unsigned char* const end = p + len;
+    uint64_t h64;
+    if (len >= 32) {
+        const unsigned char* const limit = end - 32;
+        uint64_t v1 = PRIME64_1 + PRIME64_2;
+        uint64_t v2 = PRIME64_2;
+        uint64_t v3 = 0;
+        uint64_t v4 = 0 - PRIME64_1;
+        do {
+            v1 = XXH_rotl64(v1 + XXH64_read64(p) * PRIME64_2, 31) * PRIME64_1;
+            p += 8;
+            v2 = XXH_rotl64(v2 + XXH64_read64(p) * PRIME64_2, 31) * PRIME64_1;
+            p += 8;
+            v3 = XXH_rotl64(v3 + XXH64_read64(p) * PRIME64_2, 31) * PRIME64_1;
+            p += 8;
+            v4 = XXH_rotl64(v4 + XXH64_read64(p) * PRIME64_2, 31) * PRIME64_1;
+            p += 8;
+        } while (p <= limit);
+        h64 = XXH_rotl64(v1, 1) + XXH_rotl64(v2, 7) +
+              XXH_rotl64(v3, 12) + XXH_rotl64(v4, 18);
+        v1 = XXH_rotl64(v1 * PRIME64_2, 31) * PRIME64_1;
+        h64 = (h64 ^ v1) * PRIME64_1 + PRIME64_4;
+        v2 = XXH_rotl64(v2 * PRIME64_2, 31) * PRIME64_1;
+        h64 = (h64 ^ v2) * PRIME64_1 + PRIME64_4;
+        v3 = XXH_rotl64(v3 * PRIME64_2, 31) * PRIME64_1;
+        h64 = (h64 ^ v3) * PRIME64_1 + PRIME64_4;
+        v4 = XXH_rotl64(v4 * PRIME64_2, 31) * PRIME64_1;
+        h64 = (h64 ^ v4) * PRIME64_1 + PRIME64_4;
+    } else {
+        h64 = PRIME64_5;
+    }
+    h64 += (uint64_t)len;
+    while (p + 8 <= end) {
+        uint64_t k1 = XXH_rotl64(XXH64_read64(p) * PRIME64_2, 31) * PRIME64_1;
+        h64 ^= k1;
+        h64 = XXH_rotl64(h64, 27) * PRIME64_1 + PRIME64_4;
+        p += 8;
+    }
+    if (p + 4 <= end) {
+        h64 ^= (uint64_t)XXH64_read32(p) * PRIME64_1;
+        h64 = XXH_rotl64(h64, 23) * PRIME64_2 + PRIME64_3;
+        p += 4;
+    }
+    while (p < end) {
+        h64 ^= (*p) * PRIME64_5;
+        h64 = XXH_rotl64(h64, 11) * PRIME64_1;
+        p++;
+    }
+    h64 ^= h64 >> 33;
+    h64 *= PRIME64_2;
+    h64 ^= h64 >> 29;
+    h64 *= PRIME64_3;
+    h64 ^= h64 >> 32;
+    return h64;
+}
+```
+
+utils.h:
+```
+#ifndef UTILS_H
+#define UTILS_H
+
+#include "storage.h"
+
+int read_board_size(void);
+char read_move(void);
+void display_board(Storage* s, int size, long long score);
+void display_game_over(int won, long long score);
+
+#endif
+```
+
+Makefile:
+```
+CC = gcc
+CFLAGS = -Wall -Wextra -std=c11 -O2
+LDFLAGS = -L. -Wl,-rpath='$$ORIGIN'
+
+# Выбор реализации: USE=hash или USE=tree
+ifndef USE
+    USE=hash
+endif
+
+ifeq ($(USE),hash)
+    STORAGE_OBJ = storage_hash.o func_hash.o hash.o
+else ifeq ($(USE),tree)
+    STORAGE_OBJ = storage_tree.o func_tree.o
+else
+    $(error USE must be hash or tree)
+endif
+
+all: game
+
+game: lab.o game.o utils.o $(STORAGE_OBJ)
+	$(CC) -o $@ $^ $(LDFLAGS)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -f *.o game
+
+.PHONY: all clean
+```
+
+game.h:
+```
+#ifndef GAME_H
+#define GAME_H
+#include "storage.h"
+
+void run_game(int size);
+
+#endif
+```
+
+game.c:
+```
+#include "game.h"
+#include "utils.h"
+#include "storage.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+
+#define PROB_4  10
+#define KEY_BUF_SIZE 32
+
+static int get_cell(Storage* s, int x, int y) {
+    char buf[KEY_BUF_SIZE];
+    snprintf(buf, sizeof(buf), "%d,%d", x, y);
+    int val = storage_find(s, buf);
+    return (val == -1) ? 0 : val;
+}
+
+static void set_cell(Storage* s, int x, int y, int val) {
+    char buf[KEY_BUF_SIZE];
+    snprintf(buf, sizeof(buf), "%d,%d", x, y);
+    if (val == 0) {
+        storage_delete(s, buf);
+    } else {
+        storage_insert(s, buf, val);
+    }
+}
+
+// Нужно переделать, без двойных циклов. Легче сделать подсчёт и сравнение с максимальным количеством элементов 
+static int has_empty_cell(Storage* s, int size) {
+    for (int y = 0; y < size; y++) {
+        for (int x = 0; x < size; x++) {
+            if (get_cell(s, x, y) == 0)
+                return 1;
+        }
+    }
+    return 0;
+}
+
+
+static int can_move(Storage* s, int size) {
+    if (has_empty_cell(s, size))
+        return 1;
+    for (int y = 0; y < size; y++) {
+        for (int x = 0; x < size; x++) {
+            int val = get_cell(s, x, y);
+            if (val == 0) continue;
+            if (x + 1 < size) {
+                int right = get_cell(s, x + 1, y);
+                if (right == val) return 1;
+            }
+            if (y + 1 < size) {
+                int down = get_cell(s, x, y + 1);
+                if (down == val) return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+// Нужно сделать счётчик с максимальным значением, и потом его просто обновлять
+static int has_won(Storage* s, int size) {
+    for (int y = 0; y < size; y++) {
+        for (int x = 0; x < size; x++) {
+            if (get_cell(s, x, y) == 2048)
+                return 1;
+        }
+    }
+    return 0;
+}
+
+static long long shift_line(int* line, int length) {
+    long long points = 0;
+    int write = 0;
+    for (int read = 0; read < length; read++) {
+        if (line[read] != 0) {
+            if (write > 0 && line[write - 1] == line[read]) {
+                line[write - 1] *= 2;
+                points += line[write - 1];
+            } else {
+                line[write++] = line[read];
+            }
+        }
+    }
+    while (write < length) line[write++] = 0;
+    return points;
+}
+
+static int add_random_tile(Storage* s, int size, long long* score) {
+    (void)score;
+    int empty_count = 0;
+    int* empty_x = malloc(size * size * sizeof(int));
+    int* empty_y = malloc(size * size * sizeof(int));
+    if (!empty_x || !empty_y) {
+        free(empty_x);
+        free(empty_y);
+        return 1;
+    }
+    for (int y = 0; y < size; y++) {
+        for (int x = 0; x < size; x++) {
+            if (get_cell(s, x, y) == 0) {
+                empty_x[empty_count] = x;
+                empty_y[empty_count] = y;
+                empty_count++;
+            }
+        }
+    }
+    if (empty_count == 0) {
+        free(empty_x);
+        free(empty_y);
+        return 1;
+    }
+    int idx = rand() % empty_count;
+    int x = empty_x[idx];
+    int y = empty_y[idx];
+    free(empty_x);
+    free(empty_y);
+    int new_val = (rand() % 100 < PROB_4) ? 4 : 2;
+    set_cell(s, x, y, new_val);
+    return 0;
+}
+
+static int move(Storage* s, int size, char dir, long long* score) {
+    int moved = 0;
+    long long gain = 0;
+    if (dir == 'a') { // влево
+        for (int y = 0; y < size; y++) {
+            int* line = malloc(size * sizeof(int));
+            if (!line) continue;
+            for (int x = 0; x < size; x++)
+                line[x] = get_cell(s, x, y);
+            gain += shift_line(line, size);
+            for (int x = 0; x < size; x++) {
+                int old = get_cell(s, x, y);
+                if (old != line[x]) {
+                    set_cell(s, x, y, line[x]);
+                    moved = 1;
+                }
+            }
+            free(line);
+        }
+    }
+    else if (dir == 'd') { // вправо
+        for (int y = 0; y < size; y++) {
+            int* line = malloc(size * sizeof(int));
+            if (!line) continue;
+            for (int x = 0; x < size; x++)
+                line[size - 1 - x] = get_cell(s, x, y);
+            gain += shift_line(line, size);
+            for (int x = 0; x < size; x++) {
+                int new_val = line[size - 1 - x];
+                int old = get_cell(s, x, y);
+                if (old != new_val) {
+                    set_cell(s, x, y, new_val);
+                    moved = 1;
+                }
+            }
+            free(line);
+        }
+    }
+    else if (dir == 'w') { // вверх
+        for (int x = 0; x < size; x++) {
+            int* col = malloc(size * sizeof(int));
+            if (!col) continue;
+            for (int y = 0; y < size; y++)
+                col[y] = get_cell(s, x, y);
+            gain += shift_line(col, size);
+            for (int y = 0; y < size; y++) {
+                int old = get_cell(s, x, y);
+                if (old != col[y]) {
+                    set_cell(s, x, y, col[y]);
+                    moved = 1;
+                }
+            }
+            free(col);
+        }
+    }
+    else if (dir == 's') { // вниз
+        for (int x = 0; x < size; x++) {
+            int* col = malloc(size * sizeof(int));
+            if (!col) continue;
+            for (int y = 0; y < size; y++)
+                col[size - 1 - y] = get_cell(s, x, y);
+            gain += shift_line(col, size);
+            for (int y = 0; y < size; y++) {
+                int new_val = col[size - 1 - y];
+                int old = get_cell(s, x, y);
+                if (old != new_val) {
+                    set_cell(s, x, y, new_val);
+                    moved = 1;
+                }
+            }
+            free(col);
+        }
+    }
+    if (moved) {
+        *score += gain;
+        add_random_tile(s, size, score);
+    }
+    return moved;
+}
+
+void run_game(int size) {
+    srand(time(NULL));
+    Storage* storage = storage_init(size * size * 2);
+    if (!storage) {
+        fprintf(stderr, "Ошибка инициализации хранилища\n");
+        return;
+    }
+    long long score = 0;
+    add_random_tile(storage, size, &score);
+    add_random_tile(storage, size, &score);
+    int game_over = 0;
+    int won = 0;
+    int quit = 0;
+    while (!game_over && !quit) {
+        display_board(storage, size, score);
+        char dir = read_move();
+        if (dir == 'q') {
+            quit = 1;
+            break;
+        }
+        if (move(storage, size, dir, &score)) {
+            if (has_won(storage, size)) {
+                won = 1;
+                game_over = 1;
+            } else if (!can_move(storage, size)) {
+                game_over = 1;
+            }
+        } else {
+            printf("Невозможный ход. Попробуйте ещё раз.\n");
+        }
+    }
+
+    display_board(storage, size, score);
+    display_game_over(won, score);
+    storage_free(storage);
+}
+```
+
+lab.c:
+```
+#include "game.h"
+#include "utils.h"
+#include <stdio.h>
+
+int main(void) {
+    int size = read_board_size();
+    if (size == 0) return 0;
+    run_game(size);
+    return 0;
+}
+```
+
+script.py:
+```
+import os
+import argparse
+import sys
+
+def collect_and_combine(input_dir, output_file, encoding='utf-8'):
+    """
+    Рекурсивно обходит input_dir, читает все файлы (кроме выходного) и записывает их
+    содержимое в output_file с заголовками-разделителями.
+    """
+    # Нормализуем пути
+    input_dir = os.path.abspath(input_dir)
+    output_file = os.path.abspath(output_file)
+
+    if not os.path.isdir(input_dir):
+        print(f"Ошибка: папка '{input_dir}' не существует.", file=sys.stderr)
+        sys.exit(1)
+
+    # Проверяем, не пытаемся ли мы записать в файл внутри самой обрабатываемой папки
+    # (это приведёт к чтению растущего файла). Если да – предупреждаем.
+    if output_file.startswith(input_dir):
+        print(
+            f"Предупреждение: выходной файл '{output_file}' находится внутри обрабатываемой папки.",
+            file=sys.stderr
+        )
+        print("Он будет пропущен при чтении, но это может вызвать путаницу.", file=sys.stderr)
+
+    with open(output_file, 'w', encoding=encoding) as out_f:
+        for root, dirs, files in os.walk(input_dir):
+            for file in files:
+                full_path = os.path.join(root, file)
+
+                # Пропускаем сам выходной файл, если он попался в обходе
+                if full_path == output_file:
+                    continue
+
+                # Получаем относительный путь от input_dir для красоты
+                rel_path = os.path.relpath(full_path, input_dir)
+
+                try:
+                    with open(full_path, 'r', encoding=encoding) as in_f:
+                        content = in_f.read()
+                except Exception as e:
+                    print(f"Не удалось прочитать файл {rel_path}: {e}", file=sys.stderr)
+                    # Можно записать в выходной файл сообщение об ошибке
+                    content = f"[Ошибка чтения: {e}]"
+
+                # Записываем заголовок и содержимое
+                out_f.write(f"{rel_path}:\n")
+                out_f.write("```\n")
+                out_f.write(content)
+                # Если файл не заканчивается переводом строки, добавим его для аккуратности
+                if not content.endswith('\n'):
+                    out_f.write('\n')
+                out_f.write("```\n\n")
+
+    print(f"Готово! Результат сохранён в {output_file}")
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Объединяет текстовые файлы из папки в один большой файл с метками источников."
+    )
+    parser.add_argument(
+        '-i', '--input-dir',
+        default='.',
+        help="Корневая папка для поиска текстовых файлов (по умолчанию текущая)"
+    )
+    parser.add_argument(
+        '-o', '--output-file',
+        default='combined.txt',
+        help="Имя выходного файла (по умолчанию combined.txt)"
+    )
+    parser.add_argument(
+        '--encoding',
+        default='utf-8',
+        help="Кодировка текстовых файлов (по умолчанию utf-8)"
+    )
+    args = parser.parse_args()
+
+    collect_and_combine(args.input_dir, args.output_file, args.encoding)
+
+if __name__ == '__main__':
+    main()
+```
+
+storage_tree.c:
+```
+#include "storage.h"
+#include "structures.h"
+#include <stdlib.h>
+#include "func_tree.h"
+
+struct Storage {
+    Tree* tree;
+    int max;
+};
+
+Storage* storage_init(int capacity) {
+    (void)capacity;
+    Storage* s = malloc(sizeof(*s));
+    if (!s) return NULL;
+    s->tree = tree_init();
+    if (!s->tree) {
+        free(s);
+        return NULL;
+    }
+    return s;
+}
+
+int storage_insert(Storage* s, const char* coords, int value) {
+    if (!s) return 1;
+    return insert(s->tree, value, coords);
+}
+
+int storage_find(Storage* s, const char* coords) {
+    if (!s) return -1;
+    Leaf* node = find(s->tree, (char*)coords);
+    return node ? node->key : -1;
+}
+
+int storage_delete(Storage* s, const char* coords) {
+    if (!s) return 1;
+    return delete(s->tree, coords);
+}
+
+void storage_free(Storage* s) {
+    if (!s) return;
+    free_tree(s->tree);
+    free(s);
+}
+
+int storage_have_empty_cell(Storage* s, int size){
+    if (!s) return -1;
+    return (s -> tree -> count < size*size)? 1: 0;
+}
+```
+
+structures.h:
+```
+#ifndef STRUCTURES_H
+#define STRUCTURES_H
+
+#include <stdint.h>
+typedef struct 
+{
+    int data;
+    char* coords;
+}Node;
+
+
+typedef struct{
+    Node* data;
+    int len;
+    int capasity;
+    uint64_t (*hash)(const char*);
+}Table;
+
+typedef struct Leaf
+{
+    struct Leaf* right;
+    struct Leaf* left;
+    struct Leaf* parent;
+    int key;
+    char* coords;
+}Leaf;
+
+typedef struct
+{
+    Leaf* root;
+    int count;
+}Tree;
+
+typedef struct Stack
+{
+    int top;
+    int capacity;
+    Leaf** array;
+}Stack;
+
+
+#endif
+```
+
+func_tree.h:
+```
+#ifndef FUNC_TREE_H
+#define FUNC_TREE_H
+#include "structures.h"
+
+Leaf* splay(Leaf* root, const char* coords);
+Leaf* find(Tree* tree, const char* coords);
+Leaf* find_ex(Leaf* node, char mode);
+char insert(Tree* tree, int key, const char* coords);
+Tree* tree_init(void);
+Stack* stack_init(unsigned int capacity);
+void free_tree(Tree* tree);
+char delete(Tree* tree, const char* coords);
+
+#endif
+```
+
+func_hash.h:
+```
+#ifndef FUNC_HASH_H
+#define FUNC_HASH_H
+#include "structures.h"
+#include <stdint.h>
+
+int find(Table* table, char* coords);
+char insert(Table* table, int key, char* coords);
+char delete(Table* table, const char* coords);
+Table* init_table(int capasity, uint64_t (*hash)(const char*));
+void free_table(Table* table);
+
+#endif
+```
+
+storage_hash.c:
+```
+#include "storage.h"
+#include "structures.h"
+#include <stdlib.h>
+#include "func_hash.h"
+#include "hash.h"
+
+struct Storage {
+    Table* table;
+    int max;
+};
+
+
+Storage* storage_init(int capacity) {
+    Storage* s = malloc(sizeof(*s));
+    if (!s) return NULL;
+    s->table = init_table(capacity, hash_string);
+    if (!s->table) {
+        free(s);
+        return NULL;
+    }
+    return s;
+}
+
+int storage_insert(Storage* s, const char* coords, int value) {
+    if (!s) return 1;
+    return insert(s->table, value, (char*)coords);
+}
+
+int storage_find(Storage* s, const char* coords) {
+    if (!s) return -1;
+    int idx = find(s->table, (char*)coords);
+    if (idx == -1) return -1;
+    return s->table->data[idx].data;
+}
+
+int storage_delete(Storage* s, const char* coords) {
+    if (!s) return 1;
+    return delete(s->table, coords);
+}
+
+void storage_free(Storage* s) {
+    if (!s) return;
+    free_table(s->table);
+    free(s);
+}
+
+int storage_have_empty_cell(Storage* s, int size){
+    if (!s) return -1;
+    return (s -> table -> len < size*size)? 1: 0;
+}
+```
+
+storage.h:
+```
+#ifndef STORAGE_H
+#define STORAGE_H
+
+typedef struct Storage Storage;
+Storage* storage_init(int capacity);
+int storage_insert(Storage* s, const char* coords, int value);
+int storage_find(Storage* s, const char* coords);
+int storage_delete(Storage* s, const char* coords);
+void storage_free(Storage* s);
+int storage_have_empty_cell(Storage* s, int size);
+
+#endif
+```
+
+func_hash.c:
+```
+#include <stdlib.h>
+#include <stdio.h>
+#include "structures.h"
+#include <stdint.h>
+#include <string.h>
+#include "hash.h"
+
+int find(Table* table, char* coords) {
+    if (!table || !coords || !table->data || table->len <= 0) return -1;
+    int start = (int)(table->hash((const char*)coords) % (uint64_t)table->capasity);
+    int i = start;
+    while (table -> data[i].data != 0) {
+        if (strcmp(table->data[i].coords, coords) == 0) return i;
+        i = (i + 1) % table->capasity;
+        if (i == start) break;
+    }
+    return -1;
+}
+
+char insert(Table* table, int key, char* coords) {
+    if (!table || !coords || !table->data || table->len == table->capasity) return 1;
+    int exist_idx = find(table, coords);
+    if (exist_idx != -1) {
+        table->data[exist_idx].data = key;
+        return 2;
+    }
+    char* new_coords = (char*)malloc(strlen(coords) + 1);
+    if (!new_coords) return 1;
+    strcpy(new_coords, coords);
+    Node new_node = {key, new_coords};
+    int start = (int)(table->hash((const char*)coords) % (uint64_t)table->capasity);
+    int i = start;
+    while (table->data[i].data != 0) {
+        i = (i + 1) % table->capasity;
+        if (i == start) {
+            free(new_coords);
+            return 1;
+        }
+    }
+    table->data[i] = new_node;
+    table->len++;
+    return 0;
+}
+
+char delete(Table* table, const char* coords) {
+    if (!table || !table->data || table->len <= 0 || !coords) return 1;
+    int idx = find(table, (char*)coords);
+    if (idx == -1) return 1;
+    free(table->data[idx].coords);
+    table->data[idx].data = 0;
+    table->data[idx].coords = NULL;
+    table->len--;
+    return 0;
+}
+
+Table* init_table(int capasity, uint64_t (*hash)(const char*)) {
+    if (capasity <= 0) return NULL;
+    Table* table = (Table*)malloc(sizeof(Table));
+    if (!table) return NULL;
+    table->hash = hash;
+    table->capasity = capasity;
+    table->len = 0;
+    table->data = calloc(capasity, sizeof(Node));
+    if (!table->data) {
+        free(table);
+        return NULL;
+    }
+    return table;
+}
+
+void free_table(Table* table) {
+    if (!table || !table->data) return;
+    for (int i = 0; i < table->capasity; i++) {
+        free(table->data[i].coords);
+    }
+    free(table->data);
+    free(table);
+}
+```
+
+hash.h:
+```
+#ifndef HASH_H
+#define HASH_H
+#include <stdint.h>
+
+uint64_t hash_string(const char* data);
+#endif
+```
+

@@ -69,6 +69,7 @@ CMakeFiles/table_lib.dir/utils.c.o: /home/stalkerept/Desktop/Программи�
   /usr/include/alloca.h \
   /usr/include/asm-generic/errno-base.h \
   /usr/include/asm-generic/errno.h \
+  /usr/include/ctype.h \
   /usr/include/endian.h \
   /usr/include/errno.h \
   /usr/include/features-time64.h \
@@ -214,6 +215,8 @@ CMakeFiles/table_lib.dir/utils.c.o: /home/stalkerept/Desktop/Программи�
 /usr/include/string.h:
 
 /usr/include/x86_64-linux-gnu/bits/types/__mbstate_t.h:
+
+/usr/include/ctype.h:
 
 /usr/include/x86_64-linux-gnu/bits/uintn-identity.h:
 

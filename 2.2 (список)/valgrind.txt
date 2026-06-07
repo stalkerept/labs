@@ -1,0 +1,48 @@
+==19481== Memcheck, a memory error detector
+==19481== Copyright (C) 2002-2024, and GNU GPL'd, by Julian Seward et al.
+==19481== Using Valgrind-3.25.1 and LibVEX; rerun with -h for copyright info
+==19481== Command: ./lab
+==19481== 
+Enter patients (format: [*]id/ta/ts ...):
+1
+a
+1
+a b
+2
+a b c
+5
+a d b c
+6
+a e d b c
+6
+a e d b c f
+21
+e d b c f
+21
+e d b c f
+26
+d b c f
+26
+d b c f
+34
+b c f
+34
+b c f
+49
+c f
+49
+c f
+59
+f
+59
+f
+68
+
+==19481== 
+==19481== HEAP SUMMARY:
+==19481==     in use at exit: 0 bytes in 0 blocks
+==19481==   total heap usage: 14 allocs, 14 frees, 7,088 bytes allocated
+==19481== 
+==19481== All heap blocks were freed -- no leaks are possible
+==19481== 
+==19481== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
